@@ -291,6 +291,19 @@ button.mini {
   border: 1px dashed rgba(139, 90, 43, 0.8);
   box-shadow: none;
 }
+/* 坐标标签：仅在空格上绘制，位于格子底部（棋子下方） */
+.chess-cell .coord-label {
+  position: absolute;
+  bottom: 5%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: calc(var(--cell) * 0.18);
+  font-weight: normal;
+  color: rgba(107, 62, 21, 0.75);
+  line-height: 1;
+  pointer-events: none;
+  letter-spacing: 0.02em;
+}
 .chess-cell.red {
   color: var(--red-player);
   border-color: var(--red-player);

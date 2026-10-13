@@ -32,7 +32,17 @@ const store = reactive<GameStore>({
   canUndo: false,
 });
 
-const actionIndexCache = new Map<string, number | null>();
+/**
+ * 「变体 + 坐标 → 动作索引」缓存。
+ *
+ * from/to 到动作索引的映射只取决于变体的几何结构（行列数），与具体局面无关，
+ * 因此键带上 variant 后条目永远有效，无需在对局重置 / 悔棋 / 落子时失效。
+ *
+ * 注意：null（坐标对不构成任何动作）不可缓存——REST 模式下 getMoveAction
+ * 依赖 lastSnapshot，页面刚加载 / 后端尚未就绪时的 null 是暂态，
+ * 缓存它会导致后续同坐标的合法动作被误判为「该棋子无法移动到此处」。
+ */
+const actionIndexCache = new Map<string, number>();
 
 const statusText = computed(() => {
   const s = store.state;
@@ -76,15 +86,18 @@ function logMove(prev: GameState, next: GameState) {
 }
 
 async function cachedMoveAction(fromSq: number, toSq: number): Promise<number | null> {
-  const key = `${fromSq}-${toSq}`;
-  if (actionIndexCache.has(key)) return actionIndexCache.get(key)!;
+  const variant = store.state?.variant;
+  if (!variant) return null;
+  const key = `${variant}:${fromSq}-${toSq}`;
+  const hit = actionIndexCache.get(key);
+  if (hit !== undefined) return hit;
   try {
     const action = await api.getMoveAction(fromSq, toSq);
-    actionIndexCache.set(key, action);
+    // 仅缓存非 null 结果（坐标→动作映射恒定）；null 可能为暂态，留待下次查询
+    if (action !== null) actionIndexCache.set(key, action);
     return action;
   } catch (err) {
     console.error('get_move_action failed', err);
-    actionIndexCache.set(key, null);
     return null;
   }
 }

@@ -42,11 +42,19 @@ function cellClass(idx: number): string[] {
 function onClick(idx: number) {
   if (!props.readonly) emit('cell-click', idx);
 }
+
+/** 坐标标签：列用字母（a 起），行用数字（自上而下 1 起），如 "b3" */
+function coordText(idx: number): string {
+  const col = idx % dims.value.cols;
+  const row = Math.floor(idx / dims.value.cols);
+  return String.fromCharCode(97 + col) + String(row + 1);
+}
 </script>
 
 <template>
   <div class="chess-board" :style="boardStyle">
     <div v-for="(slot, idx) in board" :key="idx" :class="cellClass(idx)" @click="onClick(idx)">
+      <span v-if="slot === 'Empty'" class="coord-label">{{ coordText(idx) }}</span>
       {{ pieceText(slot) }}
     </div>
   </div>

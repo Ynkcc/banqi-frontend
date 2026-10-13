@@ -22,6 +22,21 @@ import type {
   VariantInfo,
 } from './types';
 
+/**
+ * 合法棋子类型全名（与 domain/pieces.ts 的 PIECE_TYPE_ORDER 保持一致）。
+ * 注意：此处不能直接 import domain/pieces——它会经 variants.ts 循环依赖回
+ * api/client.ts，导致打包产物运行期 TDZ 报错，故以本名单消除环。
+ */
+const VALID_TYPE_NAMES = new Set([
+  'General',
+  'Advisor',
+  'Elephant',
+  'Chariot',
+  'Horse',
+  'Cannon',
+  'Soldier',
+]);
+
 function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
@@ -82,6 +97,15 @@ function cellToSlot(cell: {
   return cell.state === 'hidden' ? 'Hidden' : 'Empty';
 }
 
+/** server 棋子类型小写名（"soldier"）→ 前端全名（"Soldier"），供 PieceTray/countByType 使用。 */
+function toTypeNames(list: unknown): string[] {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((name): name is string => typeof name === 'string')
+    .map((name) => name.charAt(0).toUpperCase() + name.slice(1))
+    .filter((name) => VALID_TYPE_NAMES.has(name));
+}
+
 /** server GameStateResp → 前端 GameState（契约适配，字段映射见 docs/backend-api.md）。 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function adaptServerState(s: any): { state: GameState; terminated: boolean; truncated: boolean; winner: number } {
@@ -96,10 +120,10 @@ function adaptServerState(s: any): { state: GameState; terminated: boolean; trun
     current_player: s.currentPlayer === 'red' ? 'Red' : 'Black',
     move_counter: s.moveCount,
     total_step_counter: s.totalSteps,
-    dead_red: [],
-    dead_black: [],
-    hidden_red: [],
-    hidden_black: [],
+    dead_red: toTypeNames(s.deadRed),
+    dead_black: toTypeNames(s.deadBlack),
+    hidden_red: toTypeNames(s.hiddenRed),
+    hidden_black: toTypeNames(s.hiddenBlack),
     action_masks: actionMasks,
     reveal_probabilities: [],
     bitboards: {},
