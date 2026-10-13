@@ -2,31 +2,24 @@
  * 变体元信息域模块：元数据全部来自后端 `list_variants`（banqi-core 单一真源）。
  *
  * 新增变体只改 banqi-core（Variant 枚举 + config 函数），本模块与所有 UI
- * 组件零改动；仅在 IPC 不可用的兜底场景下保留最小默认表。
+ * 组件零改动；不维护本地兜底表（避免与 core 漂移，历史上 4x8-fast 血量
+ * 曾与 core 不一致）。
  *
- * 模块加载即发起拉取，同步 helper 在元信息未就绪时使用兜底表
- * （兜底表与 core 同源，仅作为首帧/异常的过渡，正常路径以拉取结果为准）。
+ * 模块加载即发起拉取；同步 helper 在元信息未就绪/拉取失败时使用几何或
+ * 默认值回退（见各函数注释），仅影响首帧短暂显示，正常路径以拉取结果为准。
  */
 
 import { api } from '../api/client';
 import type { VariantInfo } from '../api/types';
 
-/** 兜底表：仅在后端 list_variants 未就绪/失败时使用。 */
-const FALLBACK: VariantInfo[] = [
-  { id: '4x8', label: '暗棋 (4x8)', rows: 4, cols: 8, initial_health: 60, max_consecutive_moves_for_draw: 24 },
-  { id: '4x8-fast', label: '快速验证 (4x8-fast)', rows: 4, cols: 8, initial_health: 40, max_consecutive_moves_for_draw: 24 },
-  { id: '4x4', label: '暗棋 (4x4)', rows: 4, cols: 4, initial_health: 60, max_consecutive_moves_for_draw: 16 },
-  { id: '4x2', label: '迷你暗棋 (4x2)', rows: 4, cols: 2, initial_health: 47, max_consecutive_moves_for_draw: 8 },
-];
-
-let info: VariantInfo[] = FALLBACK;
+let info: VariantInfo[] = [];
 
 /** 进程启动即拉取；组件也可 await 此 Promise 确保元信息就绪。 */
 export const variantsReady: Promise<VariantInfo[]> = api
   .listVariants()
   .then((vs) => (info = vs))
   .catch((err) => {
-    console.error('list_variants failed, using fallback', err);
+    console.error('list_variants failed, variant meta unavailable', err);
     return info;
   });
 
