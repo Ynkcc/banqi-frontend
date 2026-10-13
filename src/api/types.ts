@@ -1,0 +1,132 @@
+/** 后端 Tauri command 返回的数据结构（与 src-tauri/src/main.rs 中 serde 序列化一一对应）。 */
+
+export type Player = 'Red' | 'Black';
+export type Slot = 'Empty' | 'Hidden' | string; // 明子格式: "R_Sol" / "B_Gen" ...
+
+export interface GameState {
+  board: Slot[];
+  current_player: Player;
+  move_counter: number;
+  total_step_counter: number;
+  dead_red: string[];
+  dead_black: string[];
+  hidden_red: string[];
+  hidden_black: string[];
+  action_masks: number[];
+  reveal_probabilities: number[];
+  bitboards: Record<string, boolean[]>;
+  hp_red: number;
+  hp_black: number;
+  variant: string; // 稳定标识，与 banqi-core Variant::as_str() 一致
+  /** server 契约字段（camelCase→snake_case 适配）：是否轮到 AI 行动。Tauri 后端为 undefined。 */
+  ai_to_move?: boolean;
+}
+
+export interface StepResult {
+  state: GameState;
+  terminated: boolean;
+  truncated: boolean;
+  winner: number;
+  /** MCTS 对手时携带本次搜索统计，其他对手为 undefined */
+  mcts_stats?: MctsSearchStats;
+}
+
+/** 一次 Gumbel MCTS 搜索的统计摘要（日志栏展示用）。 */
+export interface MctsSearchStats {
+  reused: boolean;
+  budget: number;
+  actual_sims: number;
+  max_depth: number;
+  nodes: number;
+}
+
+export type Opponent =
+  | 'PvP'
+  | 'Random'
+  | 'RevealFirst'
+  | 'CaptureFirst'
+  | 'Engine'
+  | 'MctsDL'
+  | 'MctsOnnx'
+  | 'Nnue';
+
+export type Variant = string; // 后端 list_variants 下发，不再前端枚举
+
+/** list_variants 返回：由 banqi-core 单一真源给出的变体元信息。 */
+export interface VariantInfo {
+  id: string;
+  label: string;
+  rows: number;
+  cols: number;
+  initial_health: number;
+  max_consecutive_moves_for_draw: number;
+}
+
+export interface ModelEntry {
+  name: string;
+  path: string;
+}
+
+/** list_models 返回：固定模型目录（~/banqi-models）及其中的模型文件。 */
+export interface ModelList {
+  dir: string;
+  models: ModelEntry[];
+}
+
+/** 后端编译期启用的推理后端（torch = TorchScript/MctsDL，onnx = MctsOnnx）。 */
+export interface Capabilities {
+  torch: boolean;
+  onnx: boolean;
+}
+
+export interface MctsEdge {
+  child_id: number;
+  action: number;
+  prior: number;
+  logit: number;
+  n: number;
+  q: number;
+  health_q: number;
+  is_chance: boolean;
+  chance_prob: number;
+}
+
+export interface MctsNodeSummary {
+  id: number;
+  n: number;
+  q: number;
+  health_q: number;
+  player: Player;
+  is_chance: boolean;
+  is_terminal: boolean;
+  is_expanded: boolean;
+  edge_count: number;
+}
+
+export interface MctsRootInfo {
+  root: MctsNodeSummary;
+  chosen_action: number;
+  stats: MctsSearchStats;
+}
+
+/** mcts_get_node_board 返回：某节点保存的完整局面（信息状态视角）+ 到达该节点的着法所在格。 */
+export interface MctsNodeBoard {
+  state: GameState;
+  move_coords: number[];
+}
+
+export interface MctsNodeDetail {
+  id: number;
+  prior: number;
+  logit: number;
+  n: number;
+  q: number;
+  health_q: number;
+  initial_value: number;
+  player: Player;
+  is_chance: boolean;
+  is_terminal: boolean;
+  is_expanded: boolean;
+  child_count: number;
+  outcome_count: number;
+}
