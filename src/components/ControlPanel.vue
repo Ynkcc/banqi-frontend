@@ -52,8 +52,6 @@ const ENGINE_LEVELS = [
   { value: 3000000, label: '极深（300万节点）' },
 ];
 
-const ptPathInput = ref('');
-const nnuePathInput = ref('');
 const ptSelected = ref('');
 const nnueSelected = ref('');
 
@@ -78,9 +76,9 @@ function onNewGame() {
 }
 
 async function onLoadPtModel() {
-  const finalPath = ptPathInput.value.trim() || ptSelected.value;
+  const finalPath = ptSelected.value;
   if (!finalPath) {
-    toast.error('请先选择模型（或手动输入模型路径）');
+    toast.error('请先在列表中选择模型');
     return;
   }
   if (await loadModel(finalPath)) {
@@ -89,9 +87,9 @@ async function onLoadPtModel() {
 }
 
 async function onLoadNnueModel() {
-  const finalPath = nnuePathInput.value.trim() || nnueSelected.value;
+  const finalPath = nnueSelected.value;
   if (!finalPath) {
-    toast.error('请先选择 .nnue 模型（或手动输入模型路径）');
+    toast.error('请先在列表中选择 .nnue 模型');
     return;
   }
   if (await loadModel(finalPath)) {
@@ -149,10 +147,6 @@ async function onLoadNnueModel() {
         <button :disabled="store.busy" @click="onLoadPtModel">加载模型</button>
       </div>
       <label class="field">
-        <span>路径</span>
-        <input v-model="ptPathInput" type="text" placeholder="或手动输入 .pt / .onnx 路径" />
-      </label>
-      <label class="field">
         <span>搜索次数</span>
         <input v-model.number="settings.mctsIters" type="number" min="1" />
       </label>
@@ -173,10 +167,6 @@ async function onLoadNnueModel() {
         <button :disabled="store.busy" @click="refreshModels">刷新列表</button>
         <button :disabled="store.busy" @click="onLoadNnueModel">加载模型</button>
       </div>
-      <label class="field">
-        <span>路径</span>
-        <input v-model="nnuePathInput" type="text" placeholder="或手动输入 .nnue 路径" />
-      </label>
       <label class="field">
         <span>搜索深度</span>
         <input v-model.number="settings.nnueDepth" type="number" min="1" />

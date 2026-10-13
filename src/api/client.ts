@@ -299,8 +299,11 @@ const restApi = {
     throw new RestError('HTTP 后端暂不支持运行期加载模型（重启 server 指定 models/）');
   },
   async setMctsIterations(iters: number) {
-    // 契约预留：POST /api/settings（未实现）
-    throw new RestError(`HTTP 后端暂不支持运行期设置（iters=${iters}，见 docs/backend-api.md）`);
+    const resp = await http<{ mctsSims: number }>('/api/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ mctsSims: iters }),
+    });
+    return resp.mctsSims;
   },
   setEngineBudget() {
     return Promise.reject(new RestError('HTTP 后端暂不支持（见 docs/backend-api.md）'));
