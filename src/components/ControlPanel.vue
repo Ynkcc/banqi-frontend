@@ -6,7 +6,7 @@ import { useGame } from '../composables/useGame';
 import { useSettings } from '../composables/useSettings';
 import { useToast } from '../composables/useToast';
 
-const { store, resetGame } = useGame();
+const { store, resetGame, undoMove } = useGame();
 const {
   settings,
   capabilities,
@@ -116,7 +116,11 @@ async function onLoadNnueModel() {
           <option v-for="o in OPPONENTS" :key="o.value" :value="o.value">{{ o.label }}</option>
         </select>
       </label>
-      <button class="primary" :disabled="store.busy" @click="onNewGame">开始新游戏</button>
+      <div class="btn-row">
+        <button class="primary" :disabled="store.busy" @click="onNewGame">开始新游戏</button>
+        <button :disabled="store.busy || !store.canUndo" @click="undoMove">悔棋</button>
+      </div>
+      <p class="hint">悔棋回到当前行棋方上次行动前，可连续悔棋反悔自己的所有行动。</p>
     </section>
 
     <section v-if="showEngineSettings()" class="panel-card">

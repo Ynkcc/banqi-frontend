@@ -107,6 +107,7 @@ function adaptServerState(s: any): { state: GameState; terminated: boolean; trun
     hp_black: s.blackHp,
     variant: s.variant,
     ai_to_move: !!s.aiToMove,
+    can_undo: !!s.undoable,
   };
   lastSnapshot = { board: state, legal };
   const winner = s.winner === 'red' ? 1 : s.winner === 'black' ? -1 : s.winner === 'draw' ? 0 : 0;
@@ -146,6 +147,9 @@ const tauriApi = {
   },
   botMove() {
     return invoke<StepResult>('bot_move');
+  },
+  undoGame() {
+    return invoke<StepResult>('undo_game');
   },
   getGameState() {
     return invoke<GameState>('get_game_state');
@@ -225,6 +229,17 @@ const restApi = {
     const id = requireGameId();
     const resp = await http<Record<string, unknown>>(`/api/games/${id}/ai-move`, { method: 'POST' });
     return adaptMoveResp(resp);
+  },
+  async undoGame() {
+    // server 缺省语义即「回退到当前行棋方上次行动前」（AI 对局中自动含 AI 回合）
+    const id = requireGameId();
+    const resp = await http<Record<string, unknown>>(`/api/games/${id}/undo`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    // /undo 返回 GameStateResp（顶层即状态字段，非 MoveResp 包裹结构）
+    const base = adaptServerState(resp);
+    return { ...base } as StepResult;
   },
   async getGameState() {
     if (!currentGameId) throw new RestError('尚未创建对局');

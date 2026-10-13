@@ -19,6 +19,8 @@ interface GameStore {
   selectedSquare: number | null;
   moveHighlights: Map<number, MoveHighlight>;
   lastResult: { terminated: boolean; truncated: boolean; winner: number } | null;
+  /** 是否可悔棋（由后端 can_undo 契约显式维护，随每次状态同步更新） */
+  canUndo: boolean;
 }
 
 const store = reactive<GameStore>({
@@ -27,6 +29,7 @@ const store = reactive<GameStore>({
   selectedSquare: null,
   moveHighlights: new Map(),
   lastResult: null,
+  canUndo: false,
 });
 
 const actionIndexCache = new Map<string, number | null>();
@@ -139,6 +142,7 @@ async function applyStep(prev: GameState, result: { state: GameState } & { termi
   store.state = result.state;
   store.selectedSquare = null;
   store.moveHighlights = new Map();
+  store.canUndo = !!result.state.can_undo;
   checkGameOver(result);
 }
 
@@ -208,6 +212,28 @@ async function doMove(action: number) {
   }
 }
 
+/** 悔棋：回退到当前行棋方上次行动前（AI 对局中自动一并回退 AI 回合）。 */
+async function undoMove() {
+  if (!store.state || store.busy) return;
+  store.busy = true;
+  try {
+    const result = await api.undoGame();
+    appendLog(
+      `第${result.state.total_step_counter}步 [悔棋] 回退到${playerName(result.state.current_player)}上次行动前`,
+    );
+    store.lastResult = result;
+    store.state = result.state;
+    store.selectedSquare = null;
+    store.moveHighlights = new Map();
+    store.canUndo = !!result.state.can_undo;
+  } catch (e) {
+    console.error('Undo failed:', e);
+    toast.error('悔棋失败: ' + e);
+  } finally {
+    store.busy = false;
+  }
+}
+
 async function onSquareClick(idx: number) {
   const s = store.state;
   if (!s || store.busy) return;
@@ -258,6 +284,7 @@ async function resetGame(opponent: Opponent, variant: Variant) {
     appendLog(`开始新游戏（变体 ${variant}，对手 ${opponent}）`);
     store.state = await api.resetGame(opponent, variant);
     store.lastResult = null;
+    store.canUndo = !!store.state.can_undo;
     // AI 执先手时（REST 契约 ai_to_move），开局即触发 AI 行动
     if (store.state.ai_to_move === true) {
       await maybeBotTurn();
@@ -271,6 +298,7 @@ async function resetGame(opponent: Opponent, variant: Variant) {
 async function loadInitialState() {
   try {
     store.state = await api.getGameState();
+    store.canUndo = !!store.state.can_undo;
   } catch (e) {
     console.error('Failed to load initial state:', e);
     toast.error('加载初始状态失败: ' + e, 5000);
@@ -283,6 +311,7 @@ export function useGame() {
     statusText,
     loadInitialState,
     resetGame,
+    undoMove,
     onSquareClick,
     deselect,
     isSelectable,

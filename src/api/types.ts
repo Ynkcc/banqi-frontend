@@ -20,6 +20,11 @@ export interface GameState {
   variant: string; // 稳定标识，与 banqi-core Variant::as_str() 一致
   /** server 契约字段（camelCase→snake_case 适配）：是否轮到 AI 行动。Tauri 后端为 undefined。 */
   ai_to_move?: boolean;
+  /**
+   * 是否可悔棋（两后端均下发）：悔棋仅在当前行棋方尚未行动时可用，
+   * 每次回到自己上次行动前，可连续触发以反悔所有自己的行动（PvP 同语义）。
+   */
+  can_undo?: boolean;
 }
 
 export interface StepResult {
