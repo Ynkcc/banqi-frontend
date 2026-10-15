@@ -11,6 +11,7 @@
 import type {
   Capabilities,
   GameState,
+  HistoryMove,
   MctsEdge,
   MctsNodeBoard,
   MctsNodeDetail,
@@ -106,6 +107,31 @@ function toTypeNames(list: unknown): string[] {
     .filter((name) => VALID_TYPE_NAMES.has(name));
 }
 
+/** server PieceView → 前端棋子短码（"R_Sol" / "B_Gen" …，与棋盘 Slot 同格式）。 */
+function pieceViewToSlot(piece: { type?: string; side?: string } | null | undefined): string | undefined {
+  if (!piece?.type || !piece.side) return undefined;
+  const side = piece.side === 'red' ? 'R' : 'B';
+  const type = piece.type.charAt(0).toUpperCase() + piece.type.slice(1);
+  return `${side}_${type.slice(0, 3)}`;
+}
+
+/** server HistoryMoveView → 前端 HistoryMove（camelCase→snake_case + 棋子短码）。 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function adaptHistoryMove(m: any): HistoryMove {
+  return {
+    ply: m.ply,
+    player: m.player === 'red' ? 'Red' : 'Black',
+    action: m.action,
+    from: m.from,
+    to: m.to,
+    is_flip: !!m.isFlip,
+    is_chance: !!m.isChance,
+    is_capture: !!m.isCapture,
+    revealed: pieceViewToSlot(m.revealed),
+    captured: pieceViewToSlot(m.captured),
+  };
+}
+
 /** server GameStateResp → 前端 GameState（契约适配，字段映射见 docs/backend-api.md）。 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function adaptServerState(s: any): { state: GameState; terminated: boolean; truncated: boolean; winner: number } {
@@ -132,6 +158,7 @@ function adaptServerState(s: any): { state: GameState; terminated: boolean; trun
     variant: s.variant,
     ai_to_move: !!s.aiToMove,
     can_undo: !!s.undoable,
+    history: Array.isArray(s.history) ? s.history.map(adaptHistoryMove) : [],
   };
   lastSnapshot = { board: state, legal };
   const winner = s.winner === 'red' ? 1 : s.winner === 'black' ? -1 : s.winner === 'draw' ? 0 : 0;

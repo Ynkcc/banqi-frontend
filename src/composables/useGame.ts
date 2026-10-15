@@ -1,6 +1,6 @@
 import { computed, reactive } from 'vue';
 import { api } from '../api/client';
-import type { GameState, Opponent, Variant } from '../api/types';
+import type { GameState, HistoryMove, Opponent, Slot, Variant } from '../api/types';
 import { variantMaxConsecutive } from '../domain/variants';
 import { appendLog } from './useLogs';
 import { useToast } from './useToast';
@@ -21,6 +21,8 @@ interface GameStore {
   lastResult: { terminated: boolean; truncated: boolean; winner: number } | null;
   /** 是否可悔棋（由后端 can_undo 契约显式维护，随每次状态同步更新） */
   canUndo: boolean;
+  /** 决策历史面板当前选中查看的手数（null = 未选中；选中时棋盘高亮 from/to） */
+  inspectPly: number | null;
 }
 
 const store = reactive<GameStore>({
@@ -30,6 +32,7 @@ const store = reactive<GameStore>({
   moveHighlights: new Map(),
   lastResult: null,
   canUndo: false,
+  inspectPly: null,
 });
 
 /**
@@ -58,31 +61,40 @@ function playerName(p: string): string {
   return p === 'Red' ? '红方' : '黑方';
 }
 
-function describeBoardChange(prev: GameState, next: GameState): string {
-  const lines: string[] = [];
-  prev.board.forEach((slot, idx) => {
-    const now = next.board[idx];
-    if (slot === now) return;
-    const nowText = pieceText(now) || (now === 'Hidden' ? '?' : '');
-    if (slot === 'Hidden') {
-      lines.push(`位置${idx} 翻开 → ${nowText}`);
-    } else if (now === 'Empty') {
-      lines.push(`位置${idx} ${pieceText(slot)} 移出`);
-    } else if (slot === 'Empty') {
-      lines.push(`位置${idx} 落子 ${nowText}`);
-    } else {
-      lines.push(`位置${idx} ${nowText} 吃掉 ${pieceText(slot)}`);
-    }
-  });
-  return lines.join('；') || '局面变化';
+/** 一手棋的可读描述（基于后端决策历史，机会动作附实际翻出的棋子）。 */
+function moveText(m: HistoryMove, board: Slot[]): string {
+  const actor = playerName(m.player);
+  if (m.is_flip) {
+    return `[${actor}] 翻开 位置${m.to} → ${pieceText(m.revealed ?? '') || '?'}`;
+  }
+  const attacker = pieceText(board[m.from] ?? '') || '棋子';
+  if (m.is_capture && m.is_chance) {
+    // 吃暗子（含炮打暗子）：打出的暗子随即被消灭
+    return `[${actor}] ${attacker}(位置${m.from}) 打暗子 位置${m.to}，` +
+      `翻出 ${pieceText(m.revealed ?? '') || '?'}（被消灭）`;
+  }
+  if (m.is_capture) {
+    return `[${actor}] ${attacker}(位置${m.from}) 吃掉 位置${m.to} 的 ${pieceText(m.captured ?? '')}`;
+  }
+  return `[${actor}] ${attacker}(位置${m.from}) → 位置${m.to}`;
 }
 
-function logMove(prev: GameState, next: GameState) {
-  const actor = playerName(next.current_player === 'Red' ? 'Black' : 'Red');
-  appendLog(
-    `第${next.total_step_counter}步 [${actor}] ${describeBoardChange(prev, next)}` +
-      `（无吃子 ${next.move_counter}/${variantMaxConsecutive(next.variant)}）`,
-  );
+/**
+ * 把本次请求新执行的走子写入日志（取自后端决策历史，而非前端棋盘差分）。
+ *
+ * 棋盘差分无法区分「翻棋」与「吃暗子后攻击方落到目标格」，且打出的暗子
+ * 真实身份只存在于后端历史记录中——统一以后端 history 为单一真源。
+ */
+function logNewMoves(prev: GameState, next: GameState) {
+  const prevLen = prev.history?.length ?? 0;
+  const moves = next.history ?? [];
+  for (let i = prevLen; i < moves.length; i++) {
+    const m = moves[i];
+    appendLog(
+      `第${m.ply}步 ${moveText(m, prev.board)}` +
+        `（无吃子 ${next.move_counter}/${variantMaxConsecutive(next.variant)}）`,
+    );
+  }
 }
 
 async function cachedMoveAction(fromSq: number, toSq: number): Promise<number | null> {
@@ -151,11 +163,12 @@ function checkGameOver(result: { terminated: boolean; truncated: boolean; winner
 
 async function applyStep(prev: GameState, result: { state: GameState } & { terminated: boolean; truncated: boolean; winner: number }) {
   store.lastResult = result;
-  logMove(prev, result.state);
+  logNewMoves(prev, result.state);
   store.state = result.state;
   store.selectedSquare = null;
   store.moveHighlights = new Map();
   store.canUndo = !!result.state.can_undo;
+  store.inspectPly = null;
   checkGameOver(result);
 }
 
@@ -230,15 +243,21 @@ async function undoMove() {
   if (!store.state || store.busy) return;
   store.busy = true;
   try {
+    // 悔棋前先记下旧历史与旧棋盘：后端截断后即可对照出被撤销的手
+    const prevHistory = store.state.history ?? [];
+    const prevBoard = store.state.board;
     const result = await api.undoGame();
-    appendLog(
-      `第${result.state.total_step_counter}步 [悔棋] 回退到${playerName(result.state.current_player)}上次行动前`,
-    );
+    const kept = result.state.history?.length ?? 0;
+    for (const m of prevHistory.slice(kept).reverse()) {
+      appendLog(`[悔棋] 撤销 第${m.ply}步 ${moveText(m, prevBoard)}`);
+    }
+    appendLog(`回退到${playerName(result.state.current_player)}上次行动前`);
     store.lastResult = result;
     store.state = result.state;
     store.selectedSquare = null;
     store.moveHighlights = new Map();
     store.canUndo = !!result.state.can_undo;
+    store.inspectPly = null;
   } catch (e) {
     console.error('Undo failed:', e);
     toast.error('悔棋失败: ' + e);
@@ -293,6 +312,7 @@ async function resetGame(opponent: Opponent, variant: Variant) {
   if (store.busy) return;
   store.selectedSquare = null;
   store.moveHighlights = new Map();
+  store.inspectPly = null;
   try {
     appendLog(`开始新游戏（变体 ${variant}，对手 ${opponent}）`);
     store.state = await api.resetGame(opponent, variant);
@@ -312,16 +332,31 @@ async function loadInitialState() {
   try {
     store.state = await api.getGameState();
     store.canUndo = !!store.state.can_undo;
+    store.inspectPly = null;
   } catch (e) {
     console.error('Failed to load initial state:', e);
     toast.error('加载初始状态失败: ' + e, 5000);
   }
 }
 
+/** 决策历史查看：点选某手后棋盘高亮 from/to，再次点选取消。 */
+function inspectMove(ply: number | null) {
+  store.inspectPly = store.inspectPly === ply ? null : ply;
+}
+
+/** 当前查看手的 from/to 高亮标记（供 BoardView 传给 BoardGrid markers）。 */
+const inspectMarkers = computed<number[]>(() => {
+  if (store.inspectPly == null) return [];
+  const m = store.state?.history?.find((h) => h.ply === store.inspectPly);
+  return m ? (m.from === m.to ? [m.to] : [m.from, m.to]) : [];
+});
+
 export function useGame() {
   return {
     store,
     statusText,
+    inspectMarkers,
+    inspectMove,
     loadInitialState,
     resetGame,
     undoMove,

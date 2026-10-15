@@ -5,6 +5,7 @@ import { useSettings } from './composables/useSettings';
 import BoardView from './components/BoardView.vue';
 import BitboardPanel from './components/BitboardPanel.vue';
 import ControlPanel from './components/ControlPanel.vue';
+import HistoryPanel from './components/HistoryPanel.vue';
 import LogPanel from './components/LogPanel.vue';
 import MctsTreePanel from './components/MctsTreePanel.vue';
 import PieceTray from './components/PieceTray.vue';
@@ -92,6 +93,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       </section>
 
       <aside class="right-column">
+        <HistoryPanel />
         <LogPanel />
       </aside>
     </main>

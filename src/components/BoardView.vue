@@ -2,7 +2,7 @@
 import { useGame } from '../composables/useGame';
 import BoardGrid from './BoardGrid.vue';
 
-const { store, onSquareClick } = useGame();
+const { store, inspectMarkers, onSquareClick } = useGame();
 </script>
 
 <template>
@@ -14,6 +14,7 @@ const { store, onSquareClick } = useGame();
       :selected="store.selectedSquare"
       :highlights="store.moveHighlights"
       :action-masks="store.state.action_masks"
+      :markers="inspectMarkers"
       @cell-click="onSquareClick"
     />
     <div v-else class="board-empty">加载中…</div>

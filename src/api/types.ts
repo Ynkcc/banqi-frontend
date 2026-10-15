@@ -25,6 +25,31 @@ export interface GameState {
    * 每次回到自己上次行动前，可连续触发以反悔所有自己的行动（PvP 同语义）。
    */
   can_undo?: boolean;
+  /**
+   * 决策历史（棋谱，两后端均下发）：每手棋的实际执行结果。
+   * 翻棋 / 吃暗子（含炮打暗子）附实际翻出的棋子；悔棋后由后端同步截断。
+   */
+  history?: HistoryMove[];
+}
+
+/** 一手棋的决策记录（棋谱项）。棋子字段为前端短码格式（"R_Sol" / "B_Gen" …）。 */
+export interface HistoryMove {
+  /** 手数（1 起，对局内单调递增） */
+  ply: number;
+  player: Player;
+  action: number;
+  /** 源格（翻棋时 == to） */
+  from: number;
+  to: number;
+  is_flip: boolean;
+  /** 机会动作（翻棋 / 吃暗子，结果有随机性） */
+  is_chance: boolean;
+  /** 吃明子（目标是对方已翻开的明子） */
+  is_capture: boolean;
+  /** 机会动作实际翻出的棋子（翻棋 = 翻出的子；吃暗子含炮打暗子 = 打出的子） */
+  revealed?: string;
+  /** 被消灭的棋子（吃明子的被吃子；吃暗子时 == revealed） */
+  captured?: string;
 }
 
 export interface StepResult {
