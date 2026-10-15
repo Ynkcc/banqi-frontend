@@ -178,6 +178,7 @@ function adaptMoveResp(resp: any): StepResult {
       actual_sims: s.actualSims,
       max_depth: s.maxDepth,
       nodes: s.nodes,
+      elapsed_ms: s.elapsedMs ?? 0,
     };
   }
   return result;

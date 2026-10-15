@@ -68,6 +68,8 @@ export interface MctsSearchStats {
   actual_sims: number;
   max_depth: number;
   nodes: number;
+  /** 搜索本体（mcts.run()）耗时（毫秒，两后端均下发） */
+  elapsed_ms: number;
 }
 
 export type Opponent =

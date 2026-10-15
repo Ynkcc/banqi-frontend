@@ -177,7 +177,8 @@ function logMctsStats(stats: NonNullable<import('../api/types').StepResult['mcts
   appendLog(
     `MCTS 搜索: ${stats.reused ? '复用搜索树' : '全新建树'}，` +
       `实际模拟 ${stats.actual_sims}/${stats.budget} 次，` +
-      `树深度 ${stats.max_depth}，节点 ${stats.nodes}`,
+      `树深度 ${stats.max_depth}，节点 ${stats.nodes}，` +
+      `耗时 ${stats.elapsed_ms} ms`,
   );
 }
 
