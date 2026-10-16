@@ -18,6 +18,11 @@ export interface GameState {
   hp_red: number;
   hp_black: number;
   variant: string; // 稳定标识，与 banqi-core Variant::as_str() 一致
+  /**
+   * 当前局面 BFEN 文本（两后端均下发）：复制 / 粘贴重建 / issue 复现用。
+   * 不编码 last_action 与 true_board（见 banqi-core fen.rs）。
+   */
+  fen?: string;
   /** server 契约字段（camelCase→snake_case 适配）：是否轮到 AI 行动。Tauri 后端为 undefined。 */
   ai_to_move?: boolean;
   /**

@@ -156,6 +156,7 @@ function adaptServerState(s: any): { state: GameState; terminated: boolean; trun
     hp_red: s.redHp,
     hp_black: s.blackHp,
     variant: s.variant,
+    fen: typeof s.fen === 'string' ? s.fen : undefined,
     ai_to_move: !!s.aiToMove,
     can_undo: !!s.undoable,
     history: Array.isArray(s.history) ? s.history.map(adaptHistoryMove) : [],
@@ -194,6 +195,10 @@ const tauriApi = {
   resetGame(opponent: Opponent, variant: Variant, _modelFile?: string) {
     // Tauri 后端：模型经「加载模型」按钮绑定到对局，创建参数无需 modelFile
     return invoke<GameState>('reset_game', { opponent, variant });
+  },
+  loadFen(fen: string) {
+    // 由 BFEN 局面串重建对局（走子历史清空；对手类型沿用当前设置）
+    return invoke<GameState>('load_fen', { fen });
   },
   stepGame(action: number) {
     return invoke<StepResult>('step_game', { action });
@@ -271,6 +276,19 @@ const restApi = {
         // 用户选择的模型与对局绑定；未选择时服务端自动匹配
         // （同变体多候选模型时服务端会报歧义错误，要求显式选择）
         ...(modelFile ? { modelFile } : {}),
+      }),
+    });
+    currentGameId = created.gameId;
+    return adaptServerState(created.state).state;
+  },
+  async loadFen(fen: string, _modelFile?: string) {
+    // 由 BFEN 局面串重建对局：变体以 BFEN 自带标识为准；走子历史从空开始。
+    // AI 对手沿用「建局即加载」语义；模型与变体是否匹配由推理时 ort 忠实报错。
+    const created = await http<{ gameId: string; state: unknown }>('/api/games', {
+      method: 'POST',
+      body: JSON.stringify({
+        fen,
+        aiEnabled: true,
       }),
     });
     currentGameId = created.gameId;

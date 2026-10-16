@@ -6,7 +6,7 @@ import { useGame } from '../composables/useGame';
 import { useSettings } from '../composables/useSettings';
 import { useToast } from '../composables/useToast';
 
-const { store, resetGame, undoMove } = useGame();
+const { store, resetGame, copyFen, loadFen, undoMove } = useGame();
 const {
   settings,
   capabilities,
@@ -95,6 +95,13 @@ async function onLoadNnueModel() {
     settings.opponent = 'Nnue';
   }
 }
+
+/** 粘贴重建：输入框里的 BFEN 局面串非空才可触发。 */
+const fenInput = ref('');
+async function onLoadFen() {
+  if (!fenInput.value.trim()) return;
+  await loadFen(fenInput.value);
+}
 </script>
 
 <template>
@@ -179,6 +186,22 @@ async function onLoadNnueModel() {
     </section>
 
     <section class="panel-card">
+      <h3>局面 FEN</h3>
+      <div class="btn-row">
+        <button :disabled="store.busy || !store.state?.fen" @click="copyFen">复制当前局面</button>
+        <button :disabled="store.busy || !fenInput.trim()" @click="onLoadFen">粘贴重建对局</button>
+      </div>
+      <textarea
+        v-model="fenInput"
+        class="fen-input"
+        rows="3"
+        spellcheck="false"
+        placeholder="在此粘贴 BFEN 局面串（可先「复制当前局面」取得）…"
+      ></textarea>
+      <p class="hint">BFEN 含变体、盘面、行棋方、血量与暗子袋；重建后走子历史清空。</p>
+    </section>
+
+    <section class="panel-card">
       <h3>模型目录</h3>
       <p class="hint">把 .pt / .onnx / .nnue 文件复制到此目录（含子目录）后，点上方「刷新列表」即可选中。</p>
       <p class="hint">{{ modelsDir || '读取中…' }}</p>
@@ -186,3 +209,17 @@ async function onLoadNnueModel() {
     </section>
   </div>
 </template>
+
+<style scoped>
+.fen-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 8px;
+  padding: 6px 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  resize: vertical;
+  word-break: break-all;
+}
+</style>

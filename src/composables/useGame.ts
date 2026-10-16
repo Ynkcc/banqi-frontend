@@ -332,6 +332,64 @@ async function resetGame(opponent: Opponent, variant: Variant, modelFile?: strin
   }
 }
 
+/** 把文本写入剪贴板（优先 Clipboard API，不可用时退化为临时 textarea + execCommand）。 */
+async function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    if (!document.execCommand('copy')) throw new Error('execCommand(copy) 返回 false');
+  } finally {
+    document.body.removeChild(ta);
+  }
+}
+
+/** 复制当前局面 BFEN 串（含变体 / 盘面 / 行棋方 / 血量 / 暗子袋）。 */
+async function copyFen() {
+  const fen = store.state?.fen;
+  if (!fen) {
+    toast.error('当前局面无 FEN 数据');
+    return;
+  }
+  try {
+    await copyToClipboard(fen);
+    appendLog(`复制局面 FEN: ${fen}`);
+    toast.success('局面 FEN 已复制到剪贴板', 2000);
+  } catch (e) {
+    console.error('Copy FEN failed:', e);
+    toast.error('复制失败: ' + e);
+  }
+}
+
+/** 由 BFEN 局面串重建对局（变体以 BFEN 为准；走子历史清空，不可悔棋）。 */
+async function loadFen(fenInput: string) {
+  const fen = fenInput.trim();
+  if (!fen || store.busy) return;
+  store.selectedSquare = null;
+  store.moveHighlights = new Map();
+  store.inspectPly = null;
+  try {
+    store.state = await api.loadFen(fen);
+    store.lastResult = null;
+    store.canUndo = !!store.state.can_undo;
+    appendLog(`由 FEN 重建对局（变体 ${store.state.variant}）: ${fen}`);
+    // 重建后轮到 AI 时（REST 契约 ai_to_move），立即触发 AI 行动
+    if (store.state.ai_to_move === true) {
+      await maybeBotTurn();
+    }
+  } catch (e) {
+    console.error('Load FEN failed:', e);
+    toast.error('重建对局失败: ' + e);
+  }
+}
+
 async function loadInitialState() {
   try {
     store.state = await api.getGameState();
@@ -363,6 +421,8 @@ export function useGame() {
     inspectMove,
     loadInitialState,
     resetGame,
+    copyFen,
+    loadFen,
     undoMove,
     onSquareClick,
     deselect,
