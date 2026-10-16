@@ -52,9 +52,6 @@ const ENGINE_LEVELS = [
   { value: 3000000, label: '极深（300万节点）' },
 ];
 
-const ptSelected = ref('');
-const nnueSelected = ref('');
-
 function showEngineSettings(): boolean {
   return settings.opponent === 'Engine';
 }
@@ -72,11 +69,13 @@ const mctsModelHint = computed(() =>
 );
 
 function onNewGame() {
-  resetGame(settings.opponent, settings.variant);
+  // 用户选择的模型与对局绑定（REST 后端建局时按 modelFile 加载；
+  // Tauri 后端经「加载模型」按钮绑定，忽略该参数）
+  resetGame(settings.opponent, settings.variant, settings.ptModel || undefined);
 }
 
 async function onLoadPtModel() {
-  const finalPath = ptSelected.value;
+  const finalPath = settings.ptModel;
   if (!finalPath) {
     toast.error('请先在列表中选择模型');
     return;
@@ -87,7 +86,7 @@ async function onLoadPtModel() {
 }
 
 async function onLoadNnueModel() {
-  const finalPath = nnueSelected.value;
+  const finalPath = settings.nnueModel;
   if (!finalPath) {
     toast.error('请先在列表中选择 .nnue 模型');
     return;
@@ -137,7 +136,7 @@ async function onLoadNnueModel() {
       <h3>MCTS+DL 设置（TorchScript / ONNX）</h3>
       <label class="field">
         <span>模型</span>
-        <select v-model="ptSelected">
+        <select v-model="settings.ptModel">
           <option v-if="ptModels.length === 0" value="">未找到 .pt / .onnx 模型</option>
           <option v-for="m in ptModels" :key="m.path" :value="m.path">{{ m.path }}</option>
         </select>
@@ -158,7 +157,7 @@ async function onLoadNnueModel() {
       <h3>NNUE 设置（Expectimax + .nnue）</h3>
       <label class="field">
         <span>模型</span>
-        <select v-model="nnueSelected">
+        <select v-model="settings.nnueModel">
           <option v-if="nnueModels.length === 0" value="">未找到 .nnue 模型</option>
           <option v-for="m in nnueModels" :key="m.path" :value="m.path">{{ m.path }}</option>
         </select>

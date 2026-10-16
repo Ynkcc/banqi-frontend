@@ -309,14 +309,17 @@ function deselect() {
   }
 }
 
-async function resetGame(opponent: Opponent, variant: Variant) {
+async function resetGame(opponent: Opponent, variant: Variant, modelFile?: string) {
   if (store.busy) return;
   store.selectedSquare = null;
   store.moveHighlights = new Map();
   store.inspectPly = null;
   try {
-    appendLog(`开始新游戏（变体 ${variant}，对手 ${opponent}）`);
-    store.state = await api.resetGame(opponent, variant);
+    appendLog(
+      `开始新游戏（变体 ${variant}，对手 ${opponent}` +
+        `${modelFile ? `，模型 ${modelFile}` : ''}）`,
+    );
+    store.state = await api.resetGame(opponent, variant, modelFile);
     store.lastResult = null;
     store.canUndo = !!store.state.can_undo;
     // AI 执先手时（REST 契约 ai_to_move），开局即触发 AI 行动

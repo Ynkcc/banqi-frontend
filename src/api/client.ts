@@ -191,7 +191,8 @@ function requireGameId(): string {
 
 /** 统一 API：两个后端的同名方法语义一致。 */
 const tauriApi = {
-  resetGame(opponent: Opponent, variant: Variant) {
+  resetGame(opponent: Opponent, variant: Variant, _modelFile?: string) {
+    // Tauri 后端：模型经「加载模型」按钮绑定到对局，创建参数无需 modelFile
     return invoke<GameState>('reset_game', { opponent, variant });
   },
   stepGame(action: number) {
@@ -257,14 +258,20 @@ const tauriApi = {
 };
 
 const restApi = {
-  async resetGame(opponent: Opponent, variant: Variant) {
+  async resetGame(opponent: Opponent, variant: Variant, modelFile?: string) {
     // server 仅支持 AI 对手（MctsOnnx 语义）；规则对手 / PvP 为 Tauri 专属
     if (opponent !== 'MctsOnnx') {
       throw new RestError(`HTTP 后端暂不支持对手 ${opponent}（仅 MctsOnnx）`);
     }
     const created = await http<{ gameId: string; state: unknown }>('/api/games', {
       method: 'POST',
-      body: JSON.stringify({ variant, aiEnabled: true }),
+      body: JSON.stringify({
+        variant,
+        aiEnabled: true,
+        // 用户选择的模型与对局绑定；未选择时服务端自动匹配
+        // （同变体多候选模型时服务端会报歧义错误，要求显式选择）
+        ...(modelFile ? { modelFile } : {}),
+      }),
     });
     currentGameId = created.gameId;
     return adaptServerState(created.state).state;
@@ -323,8 +330,16 @@ const restApi = {
     const health = await http<{ device: string }>('/api/health');
     return { torch: false, onnx: health.device !== 'unknown' };
   },
-  async loadModel() {
-    throw new RestError('HTTP 后端暂不支持运行期加载模型（重启 server 指定 models/）');
+  async loadModel(path: string) {
+    // 模型加载与对局绑定：绑定到当前对局（服务端随用随加载并常驻缓存）
+    if (!currentGameId) {
+      return `已选择模型 ${path}（开始新对局时自动绑定）`;
+    }
+    await http(`/api/games/${currentGameId}/model`, {
+      method: 'PUT',
+      body: JSON.stringify({ modelFile: path }),
+    });
+    return `模型已绑定到当前对局: ${path}`;
   },
   async setMctsIterations(iters: number) {
     const resp = await http<{ mctsSims: number }>('/api/settings', {

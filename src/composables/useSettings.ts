@@ -1,4 +1,4 @@
-import { reactive, ref } from 'vue';
+import { reactive, ref, watch } from 'vue';
 import { api } from '../api/client';
 import type { Capabilities, ModelEntry, Opponent, Variant } from '../api/types';
 import { appendLog } from './useLogs';
@@ -6,14 +6,80 @@ import { useToast } from './useToast';
 
 const toast = useToast();
 
-const settings = reactive({
+// ============================================================================
+// 设置持久化（localStorage）：变体 / 对手 / 各引擎参数 / 选中模型随页面刷新保留。
+// ============================================================================
+
+const STORAGE_KEY = 'banqi:settings:v1';
+
+const DEFAULTS = {
   variant: '4x8' as Variant,
   opponent: 'PvP' as Opponent,
   engineLevel: 300000,
   mctsIters: 200,
   nnueDepth: 8,
   nnueBudget: 200000,
-});
+  /** 选中的 MCTS 模型（.pt / .onnx），随设置持久化 */
+  ptModel: '',
+  /** 选中的 NNUE 模型（.nnue），随设置持久化 */
+  nnueModel: '',
+};
+
+const OPPONENT_VALUES: Opponent[] = [
+  'PvP',
+  'Random',
+  'RevealFirst',
+  'CaptureFirst',
+  'MctsDL',
+  'MctsOnnx',
+  'Engine',
+  'Nnue',
+];
+
+function asStr(v: unknown): string | undefined {
+  return typeof v === 'string' ? v : undefined;
+}
+
+function asPosInt(v: unknown, fallback: number): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
+/** 读取并清洗持久化数据：类型不符 / 非法值回退默认（localStorage 内容不可信）。 */
+function loadPersisted(): Partial<typeof DEFAULTS> {
+  try {
+    const raw: Record<string, unknown> = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
+    const opponent = asStr(raw.opponent);
+    return {
+      variant: asStr(raw.variant),
+      opponent: opponent && OPPONENT_VALUES.includes(opponent as Opponent)
+        ? (opponent as Opponent)
+        : undefined,
+      engineLevel: asPosInt(raw.engineLevel, DEFAULTS.engineLevel),
+      mctsIters: asPosInt(raw.mctsIters, DEFAULTS.mctsIters),
+      nnueDepth: asPosInt(raw.nnueDepth, DEFAULTS.nnueDepth),
+      nnueBudget: asPosInt(raw.nnueBudget, DEFAULTS.nnueBudget),
+      ptModel: asStr(raw.ptModel),
+      nnueModel: asStr(raw.nnueModel),
+    };
+  } catch {
+    return {};
+  }
+}
+
+const settings = reactive({ ...DEFAULTS, ...loadPersisted() });
+
+watch(
+  settings,
+  (s) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    } catch {
+      // 隐私模式 / 配额不足时静默放弃持久化，功能不受影响
+    }
+  },
+  { deep: true },
+);
 
 const capabilities = reactive<Capabilities>({ torch: false, onnx: false });
 const ptModels = ref<ModelEntry[]>([]);
