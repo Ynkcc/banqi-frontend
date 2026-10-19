@@ -95,6 +95,14 @@ export interface NnueSearchStats {
   elapsed_ms: number;
 }
 
+/** set_engine_settings 返回：引擎搜索参数生效快照（Tauri 后端，camelCase）。 */
+export interface EngineSettings {
+  mctsSims: number;
+  engineBudget: number;
+  nnueDepth: number;
+  nnueBudget: number;
+}
+
 export type Opponent =
   | 'PvP'
   | 'Random'

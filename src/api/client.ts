@@ -10,6 +10,7 @@
 // ============================================================================
 import type {
   Capabilities,
+  EngineSettings,
   GameState,
   HistoryMove,
   MctsEdge,
@@ -245,16 +246,16 @@ const tauriApi = {
     return invoke<string>('load_model', { path });
   },
   setMctsIterations(iters: number) {
-    return invoke<number>('set_mcts_iterations', { iters });
+    return invoke<EngineSettings>('set_engine_settings', { mctsSims: iters }).then((s) => s.mctsSims);
   },
   setEngineBudget(budget: number) {
-    return invoke<number>('set_engine_budget', { budget });
+    return invoke<EngineSettings>('set_engine_settings', { engineBudget: budget }).then((s) => s.engineBudget);
   },
   setNnueDepth(depth: number) {
-    return invoke<number>('set_nnue_depth', { depth });
+    return invoke<EngineSettings>('set_engine_settings', { nnueDepth: depth }).then((s) => s.nnueDepth);
   },
   setNnueBudget(budget: number) {
-    return invoke<number>('set_nnue_budget', { budget });
+    return invoke<EngineSettings>('set_engine_settings', { nnueBudget: budget }).then((s) => s.nnueBudget);
   },
   mctsGetRoot() {
     return invoke<MctsRootInfo>('mcts_get_root');
