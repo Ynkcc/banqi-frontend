@@ -64,6 +64,8 @@ export interface StepResult {
   winner: number;
   /** MCTS 对手时携带本次搜索统计，其他对手为 undefined */
   mcts_stats?: MctsSearchStats;
+  /** NNUE 对手（REST 后端）时携带本次搜索统计，其他对手为 undefined */
+  nnue_stats?: NnueSearchStats;
 }
 
 /** 一次 Gumbel MCTS 搜索的统计摘要（日志栏展示用）。 */
@@ -74,6 +76,22 @@ export interface MctsSearchStats {
   max_depth: number;
   nodes: number;
   /** 搜索本体（mcts.run()）耗时（毫秒，两后端均下发） */
+  elapsed_ms: number;
+}
+
+/** 一次 NNUE Expectimax 搜索的统计摘要（日志栏展示用，REST 后端 Nnue 对手下发）。 */
+export interface NnueSearchStats {
+  /** 推理后端标识（恒为 "nnue"） */
+  engine: string;
+  /** 请求的迭代加深深度上限 */
+  depth: number;
+  /** 请求的节点预算 */
+  budget: number;
+  /** 实际消耗的节点数 */
+  nodes: number;
+  /** 完成的最深迭代层数 */
+  reached_depth: number;
+  /** 搜索本体耗时（毫秒） */
   elapsed_ms: number;
 }
 
@@ -110,10 +128,12 @@ export interface ModelList {
   models: ModelEntry[];
 }
 
-/** 后端编译期启用的推理后端（torch = TorchScript/MctsDL，onnx = MctsOnnx）。 */
+/** 后端编译期启用的推理后端（torch = TorchScript/MctsDL，onnx = MctsOnnx；nnue 恒可用）。 */
 export interface Capabilities {
   torch: boolean;
   onnx: boolean;
+  /** NNUE 推理（无外部依赖）；Tauri 旧版后端可能不下发该字段 */
+  nnue?: boolean;
 }
 
 export interface MctsEdge {

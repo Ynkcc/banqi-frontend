@@ -182,6 +182,15 @@ function logMctsStats(stats: NonNullable<import('../api/types').StepResult['mcts
   );
 }
 
+/** NNUE Expectimax 搜索统计写日志栏（仅 Nnue 对手携带）。 */
+function logNnueStats(stats: NonNullable<import('../api/types').StepResult['nnue_stats']>) {
+  appendLog(
+    `NNUE 搜索: 深度上限 ${stats.depth}（完成 ${stats.reached_depth} 层），` +
+      `节点 ${stats.nodes}/${stats.budget}，` +
+      `耗时 ${stats.elapsed_ms} ms`,
+  );
+}
+
 /**
  * 触发 AI 行动（仅当确实轮到 AI 时）。
  *
@@ -205,6 +214,7 @@ async function maybeBotTurn() {
     const result = await api.botMove();
     await applyStep(prev, result);
     if (result.mcts_stats) logMctsStats(result.mcts_stats);
+    if (result.nnue_stats) logNnueStats(result.nnue_stats);
   } catch (e) {
     console.error('bot_move skipped or failed:', e);
     toast.error('电脑行动失败: ' + e);
@@ -223,6 +233,7 @@ async function doMove(action: number) {
     await applyStep(prev, result);
     // REST 模式：server 在 /move 内已代跑 AI 回合，此处附带其搜索统计
     if (result.mcts_stats) logMctsStats(result.mcts_stats);
+    if (result.nnue_stats) logNnueStats(result.nnue_stats);
     const next = result.state;
     if (
       !(result.terminated || result.truncated) &&
@@ -368,15 +379,16 @@ async function copyFen() {
   }
 }
 
-/** 由 BFEN 局面串重建对局（变体以 BFEN 为准；走子历史清空，不可悔棋）。 */
-async function loadFen(fenInput: string) {
+/** 由 BFEN 局面串重建对局（变体以 BFEN 为准；走子历史清空，不可悔棋）。
+ *  modelFile：AI 对局绑定的模型（.onnx → MCTS+ONNX，.nnue → Expectimax+NNUE）。 */
+async function loadFen(fenInput: string, modelFile?: string) {
   const fen = fenInput.trim();
   if (!fen || store.busy) return;
   store.selectedSquare = null;
   store.moveHighlights = new Map();
   store.inspectPly = null;
   try {
-    store.state = await api.loadFen(fen);
+    store.state = await api.loadFen(fen, modelFile);
     store.lastResult = null;
     store.canUndo = !!store.state.can_undo;
     appendLog(`由 FEN 重建对局（变体 ${store.state.variant}）: ${fen}`);

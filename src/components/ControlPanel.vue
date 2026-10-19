@@ -69,9 +69,12 @@ const mctsModelHint = computed(() =>
 );
 
 function onNewGame() {
-  // 用户选择的模型与对局绑定（REST 后端建局时按 modelFile 加载；
-  // Tauri 后端经「加载模型」按钮绑定，忽略该参数）
-  resetGame(settings.opponent, settings.variant, settings.ptModel || undefined);
+  // 用户选择的模型与对局绑定（REST 后端建局时按 modelFile 加载并决定推理后端：
+  // .onnx → MCTS+ONNX，.nnue → Expectimax+NNUE；Tauri 后端经「加载模型」按钮绑定，
+  // 忽略该参数）
+  const modelFile =
+    settings.opponent === 'Nnue' ? settings.nnueModel || undefined : settings.ptModel || undefined;
+  resetGame(settings.opponent, settings.variant, modelFile);
 }
 
 async function onLoadPtModel() {
@@ -96,11 +99,13 @@ async function onLoadNnueModel() {
   }
 }
 
-/** 粘贴重建：输入框里的 BFEN 局面串非空才可触发。 */
+/** 粘贴重建：输入框里的 BFEN 局面串非空才可触发（AI 模型随对手设置一并绑定）。 */
 const fenInput = ref('');
 async function onLoadFen() {
   if (!fenInput.value.trim()) return;
-  await loadFen(fenInput.value);
+  const modelFile =
+    settings.opponent === 'Nnue' ? settings.nnueModel || undefined : settings.ptModel || undefined;
+  await loadFen(fenInput.value, modelFile);
 }
 </script>
 
@@ -182,7 +187,7 @@ async function onLoadFen() {
         <input v-model.number="settings.nnueBudget" type="number" min="1" />
       </label>
       <button @click="applyNnue">应用设置</button>
-      <p class="hint">模型特征维度需与所选变体匹配。</p>
+      <p class="hint">模型特征维度需与所选变体匹配；应用设置对之后创建的对局生效。</p>
     </section>
 
     <section class="panel-card">

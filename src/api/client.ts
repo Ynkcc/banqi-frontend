@@ -166,20 +166,31 @@ function adaptServerState(s: any): { state: GameState; terminated: boolean; trun
   return { state, terminated: !!s.terminated, truncated: !!s.truncated, winner };
 }
 
-/** MoveResp → StepResult：附带 AI 回合的 MCTS 搜索统计（日志栏展示用）。 */
+/** MoveResp → StepResult：附带 AI 回合的搜索统计（MCTS / NNUE 二选一，日志栏展示用）。 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function adaptMoveResp(resp: any): StepResult {
   const base = adaptServerState(resp.state);
-  const s = resp.mctsStats;
+  const mcts = resp.mctsStats;
+  const nnue = resp.nnueStats;
   const result: StepResult = { ...base };
-  if (s) {
+  if (mcts) {
     result.mcts_stats = {
-      reused: !!s.reused,
-      budget: s.budget,
-      actual_sims: s.actualSims,
-      max_depth: s.maxDepth,
-      nodes: s.nodes,
-      elapsed_ms: s.elapsedMs ?? 0,
+      reused: !!mcts.reused,
+      budget: mcts.budget,
+      actual_sims: mcts.actualSims,
+      max_depth: mcts.maxDepth,
+      nodes: mcts.nodes,
+      elapsed_ms: mcts.elapsedMs ?? 0,
+    };
+  }
+  if (nnue) {
+    result.nnue_stats = {
+      engine: nnue.engine ?? 'nnue',
+      depth: nnue.depth,
+      budget: nnue.budget,
+      nodes: nnue.nodes,
+      reached_depth: nnue.reachedDepth,
+      elapsed_ms: nnue.elapsedMs ?? 0,
     };
   }
   return result;
@@ -264,16 +275,17 @@ const tauriApi = {
 
 const restApi = {
   async resetGame(opponent: Opponent, variant: Variant, modelFile?: string) {
-    // server 仅支持 AI 对手（MctsOnnx 语义）；规则对手 / PvP 为 Tauri 专属
-    if (opponent !== 'MctsOnnx') {
-      throw new RestError(`HTTP 后端暂不支持对手 ${opponent}（仅 MctsOnnx）`);
+    // server 支持 MctsOnnx / Nnue 两类 AI 对手（其余规则对手 / PvP 为 Tauri 专属）
+    if (opponent !== 'MctsOnnx' && opponent !== 'Nnue') {
+      throw new RestError(`HTTP 后端暂不支持对手 ${opponent}（仅 MctsOnnx / Nnue）`);
     }
     const created = await http<{ gameId: string; state: unknown }>('/api/games', {
       method: 'POST',
       body: JSON.stringify({
         variant,
         aiEnabled: true,
-        // 用户选择的模型与对局绑定；未选择时服务端自动匹配
+        // 用户选择的模型与对局绑定（.onnx → MCTS+ONNX，.nnue → Expectimax+NNUE）；
+        // 未选择时服务端按变体 ID 自动匹配唯一候选
         // （同变体多候选模型时服务端会报歧义错误，要求显式选择）
         ...(modelFile ? { modelFile } : {}),
       }),
@@ -281,14 +293,15 @@ const restApi = {
     currentGameId = created.gameId;
     return adaptServerState(created.state).state;
   },
-  async loadFen(fen: string, _modelFile?: string) {
+  async loadFen(fen: string, modelFile?: string) {
     // 由 BFEN 局面串重建对局：变体以 BFEN 自带标识为准；走子历史从空开始。
-    // AI 对手沿用「建局即加载」语义；模型与变体是否匹配由推理时 ort 忠实报错。
+    // AI 对手沿用「建局即加载」语义；模型缺省时服务端按变体 ID 自动匹配。
     const created = await http<{ gameId: string; state: unknown }>('/api/games', {
       method: 'POST',
       body: JSON.stringify({
         fen,
         aiEnabled: true,
+        ...(modelFile ? { modelFile } : {}),
       }),
     });
     currentGameId = created.gameId;
@@ -346,7 +359,7 @@ const restApi = {
   },
   async getCapabilities(): Promise<Capabilities> {
     const health = await http<{ device: string }>('/api/health');
-    return { torch: false, onnx: health.device !== 'unknown' };
+    return { torch: false, onnx: health.device !== 'unknown', nnue: true };
   },
   async loadModel(path: string) {
     // 模型加载与对局绑定：绑定到当前对局（服务端随用随加载并常驻缓存）
@@ -369,11 +382,21 @@ const restApi = {
   setEngineBudget() {
     return Promise.reject(new RestError('HTTP 后端暂不支持（见 docs/backend-api.md）'));
   },
-  setNnueDepth() {
-    return Promise.reject(new RestError('Nnue 对手为 Tauri 专属'));
+  async setNnueDepth(depth: number) {
+    // PUT /api/settings 部分更新：仅调整 NNUE 默认搜索深度（返回钳制后的生效值）
+    const resp = await http<{ nnueDepth: number }>('/api/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ nnueDepth: depth }),
+    });
+    return resp.nnueDepth;
   },
-  setNnueBudget() {
-    return Promise.reject(new RestError('Nnue 对手为 Tauri 专属'));
+  async setNnueBudget(budget: number) {
+    // PUT /api/settings 部分更新：仅调整 NNUE 默认节点预算（返回钳制后的生效值）
+    const resp = await http<{ nnueBudget: number }>('/api/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ nnueBudget: budget }),
+    });
+    return resp.nnueBudget;
   },
   async mctsGetRoot() {
     return http<MctsRootInfo>(`/api/games/${requireGameId()}/mcts/root`);
