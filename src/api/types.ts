@@ -79,14 +79,18 @@ export interface MctsSearchStats {
   elapsed_ms: number;
 }
 
-/** 一次 NNUE Expectimax 搜索的统计摘要（日志栏展示用，REST 后端 Nnue 对手下发）。 */
+/** 一次 Expectimax 搜索的统计摘要（日志栏展示用，REST 后端 Nnue 对手下发）。 */
 export interface NnueSearchStats {
   /** 推理后端标识（恒为 "nnue"） */
   engine: string;
-  /** 请求的迭代加深深度上限 */
+  /** 生效的预算模式："nodes" / "depth_nodes" / "time"（旧后端可能不下发） */
+  mode?: string;
+  /** 请求的迭代加深深度上限（0 = 不限，由预算/超时控制） */
   depth: number;
-  /** 请求的节点预算 */
+  /** 请求的节点预算（0 = 不限） */
   budget: number;
+  /** 生效的时间上限毫秒（模式时间与硬超时的较小者；旧后端可能不下发） */
+  time_limit_ms?: number;
   /** 实际消耗的节点数 */
   nodes: number;
   /** 完成的最深迭代层数 */

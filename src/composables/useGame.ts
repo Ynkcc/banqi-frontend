@@ -184,10 +184,19 @@ function logMctsStats(stats: NonNullable<import('../api/types').StepResult['mcts
 
 /** NNUE Expectimax 搜索统计写日志栏（仅 Nnue 对手携带）。 */
 function logNnueStats(stats: NonNullable<import('../api/types').StepResult['nnue_stats']>) {
+  // 预算口径按模式下发（0 = 不限；time_limit_ms 为新后端附带的时间上限）
+  const modeLabel =
+    stats.mode === 'nodes'
+      ? '节点预算'
+      : stats.mode === 'time'
+        ? '时间预算'
+        : '深度+节点';
+  const budgetPart =
+    stats.mode === 'time'
+      ? `时限 ${stats.time_limit_ms ?? '?'} ms`
+      : `深度上限 ${stats.depth || '∞'}（完成 ${stats.reached_depth} 层），节点 ${stats.nodes}/${stats.budget || '∞'}`;
   appendLog(
-    `NNUE 搜索: 深度上限 ${stats.depth}（完成 ${stats.reached_depth} 层），` +
-      `节点 ${stats.nodes}/${stats.budget}，` +
-      `耗时 ${stats.elapsed_ms} ms`,
+    `NNUE 搜索 [${modeLabel}]: ${budgetPart}，耗时 ${stats.elapsed_ms} ms`,
   );
 }
 

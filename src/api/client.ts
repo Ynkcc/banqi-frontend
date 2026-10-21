@@ -193,8 +193,10 @@ function adaptMoveResp(resp: any): StepResult {
   if (nnue) {
     result.nnue_stats = {
       engine: nnue.engine ?? 'nnue',
+      mode: nnue.mode,
       depth: nnue.depth,
       budget: nnue.budget,
+      time_limit_ms: nnue.timeLimitMs,
       nodes: nnue.nodes,
       reached_depth: nnue.reachedDepth,
       elapsed_ms: nnue.elapsedMs ?? 0,
