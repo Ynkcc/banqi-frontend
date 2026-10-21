@@ -99,12 +99,21 @@ export interface NnueSearchStats {
   elapsed_ms: number;
 }
 
-/** set_engine_settings 返回：引擎搜索参数生效快照（Tauri 后端，camelCase）。 */
+/** Expectimax 搜索预算模式（与 banqi-app BudgetMode 契约一致）。 */
+export type NnueBudgetMode = 'nodes' | 'depth_nodes' | 'time';
+
+/** set_engine_settings / PUT /api/settings 返回：引擎搜索参数生效快照（camelCase）。 */
 export interface EngineSettings {
   mctsSims: number;
   engineBudget: number;
+  /** NNUE 预算模式（仅 REST 后端支持；Tauri 固定为 depth_nodes） */
+  nnueBudgetMode?: NnueBudgetMode;
   nnueDepth: number;
   nnueBudget: number;
+  /** NNUE 时间预算毫秒（time 模式生效；仅 REST 后端支持） */
+  nnueTimeMs?: number;
+  /** 搜索硬超时毫秒（全模式必选生效；仅 REST 后端可调，Tauri 固定 60s） */
+  searchTimeoutMs?: number;
 }
 
 export type Opponent =

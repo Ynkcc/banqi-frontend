@@ -1,6 +1,6 @@
 import { reactive, ref, watch } from 'vue';
 import { api } from '../api/client';
-import type { Capabilities, ModelEntry, Opponent, Variant } from '../api/types';
+import type { Capabilities, ModelEntry, NnueBudgetMode, Opponent, Variant } from '../api/types';
 import { appendLog } from './useLogs';
 import { useToast } from './useToast';
 
@@ -17,12 +17,26 @@ const DEFAULTS = {
   opponent: 'PvP' as Opponent,
   engineLevel: 300000,
   mctsIters: 200,
+  /** NNUE 预算模式：纯节点预算 / 深度+节点预算 / 用时 */
+  nnueBudgetMode: 'depth_nodes' as NnueBudgetMode,
   nnueDepth: 8,
   nnueBudget: 200000,
+  /** NNUE 时间预算毫秒（time 模式生效） */
+  nnueTimeMs: 5000,
+  /** 搜索硬超时毫秒（全模式必选生效，默认 60s；仅 REST 后端可调） */
+  searchTimeoutMs: 60000,
   /** 选中的 MCTS 模型（.pt / .onnx），随设置持久化 */
   ptModel: '',
   /** 选中的 NNUE 模型（.nnue），随设置持久化 */
   nnueModel: '',
+};
+
+const NNUE_BUDGET_MODES: NnueBudgetMode[] = ['nodes', 'depth_nodes', 'time'];
+
+const NNUE_MODE_LABELS: Record<NnueBudgetMode, string> = {
+  nodes: '纯节点预算',
+  depth_nodes: '深度+节点预算',
+  time: '用时',
 };
 
 const OPPONENT_VALUES: Opponent[] = [
@@ -50,6 +64,7 @@ function loadPersisted(): Partial<typeof DEFAULTS> {
   try {
     const raw: Record<string, unknown> = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
     const opponent = asStr(raw.opponent);
+    const nnueBudgetMode = asStr(raw.nnueBudgetMode);
     return {
       variant: asStr(raw.variant),
       opponent: opponent && OPPONENT_VALUES.includes(opponent as Opponent)
@@ -57,8 +72,13 @@ function loadPersisted(): Partial<typeof DEFAULTS> {
         : undefined,
       engineLevel: asPosInt(raw.engineLevel, DEFAULTS.engineLevel),
       mctsIters: asPosInt(raw.mctsIters, DEFAULTS.mctsIters),
+      nnueBudgetMode: nnueBudgetMode && NNUE_BUDGET_MODES.includes(nnueBudgetMode as NnueBudgetMode)
+        ? (nnueBudgetMode as NnueBudgetMode)
+        : undefined,
       nnueDepth: asPosInt(raw.nnueDepth, DEFAULTS.nnueDepth),
       nnueBudget: asPosInt(raw.nnueBudget, DEFAULTS.nnueBudget),
+      nnueTimeMs: asPosInt(raw.nnueTimeMs, DEFAULTS.nnueTimeMs),
+      searchTimeoutMs: asPosInt(raw.searchTimeoutMs, DEFAULTS.searchTimeoutMs),
       ptModel: asStr(raw.ptModel),
       nnueModel: asStr(raw.nnueModel),
     };
@@ -158,14 +178,28 @@ async function applyMctsIters(): Promise<boolean> {
 
 async function applyNnue(): Promise<boolean> {
   try {
-    const [d, b] = await Promise.all([
-      api.setNnueDepth(settings.nnueDepth),
-      api.setNnueBudget(settings.nnueBudget),
-    ]);
-    settings.nnueDepth = d;
-    settings.nnueBudget = b;
-    appendLog(`NNUE 设置已应用：深度 ${d} / 节点预算 ${b}`);
-    toast.success(`NNUE 设置已应用：深度 ${d} / 节点预算 ${b}`);
+    const s = await api.setNnueSettings({
+      mode: settings.nnueBudgetMode,
+      depth: settings.nnueDepth,
+      budget: settings.nnueBudget,
+      timeMs: settings.nnueTimeMs,
+      timeoutMs: settings.searchTimeoutMs,
+    });
+    // 回填服务器钳制后的生效值（REST 下发全量快照；Tauri 仅深度/节点预算）
+    settings.nnueDepth = s.nnueDepth;
+    settings.nnueBudget = s.nnueBudget;
+    if (s.nnueBudgetMode) settings.nnueBudgetMode = s.nnueBudgetMode;
+    if (typeof s.nnueTimeMs === 'number') settings.nnueTimeMs = s.nnueTimeMs;
+    if (typeof s.searchTimeoutMs === 'number') settings.searchTimeoutMs = s.searchTimeoutMs;
+    const modeLabel = NNUE_MODE_LABELS[settings.nnueBudgetMode];
+    const detail =
+      settings.nnueBudgetMode === 'time'
+        ? `时限 ${settings.nnueTimeMs} ms`
+        : `深度 ${settings.nnueDepth} / 节点预算 ${settings.nnueBudget}`;
+    appendLog(
+      `NNUE 设置已应用（${modeLabel}）：${detail}，硬超时 ${settings.searchTimeoutMs} ms`,
+    );
+    toast.success(`NNUE 设置已应用（${modeLabel}）：${detail}`);
     return true;
   } catch (e) {
     toast.error('设置失败: ' + e);

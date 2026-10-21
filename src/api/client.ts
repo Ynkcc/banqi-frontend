@@ -18,11 +18,21 @@ import type {
   MctsNodeDetail,
   MctsRootInfo,
   ModelList,
+  NnueBudgetMode,
   Opponent,
   StepResult,
   Variant,
   VariantInfo,
 } from './types';
+
+/** NNUE 预算设置输入（setNnueSettings 统一入参；未给出的字段保持服务器当前值）。 */
+export interface NnueSettingsInput {
+  mode?: NnueBudgetMode;
+  depth?: number;
+  budget?: number;
+  timeMs?: number;
+  timeoutMs?: number;
+}
 
 /**
  * 合法棋子类型全名（与 domain/pieces.ts 的 PIECE_TYPE_ORDER 保持一致）。
@@ -39,7 +49,8 @@ const VALID_TYPE_NAMES = new Set([
   'Soldier',
 ]);
 
-function isTauri(): boolean {
+/** 是否运行于 Tauri 桌面端（REST-only 设置项据此隐藏）。 */
+export function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
@@ -259,11 +270,13 @@ const tauriApi = {
   setEngineBudget(budget: number) {
     return invoke<EngineSettings>('set_engine_settings', { engineBudget: budget }).then((s) => s.engineBudget);
   },
-  setNnueDepth(depth: number) {
-    return invoke<EngineSettings>('set_engine_settings', { nnueDepth: depth }).then((s) => s.nnueDepth);
-  },
-  setNnueBudget(budget: number) {
-    return invoke<EngineSettings>('set_engine_settings', { nnueBudget: budget }).then((s) => s.nnueBudget);
+  setNnueSettings(p: NnueSettingsInput) {
+    // Tauri 后端不支持预算模式 / 时间预算 / 硬超时（固定 depth_nodes + 60s），
+    // 仅同步深度与节点预算
+    return invoke<EngineSettings>('set_engine_settings', {
+      nnueDepth: p.depth,
+      nnueBudget: p.budget,
+    });
   },
   mctsGetRoot() {
     return invoke<MctsRootInfo>('mcts_get_root');
@@ -404,21 +417,19 @@ const restApi = {
     });
     return resp.engineBudget;
   },
-  async setNnueDepth(depth: number) {
-    // PUT /api/settings 部分更新：仅调整 NNUE 默认搜索深度（返回钳制后的生效值）
-    const resp = await http<{ nnueDepth: number }>('/api/settings', {
+  async setNnueSettings(p: NnueSettingsInput) {
+    // PUT /api/settings 部分更新：NNUE 预算模式 / 深度 / 节点预算 / 时间预算 /
+    // 搜索硬超时（未给出的字段保持服务器当前值），返回钳制后的全量生效快照
+    return http<EngineSettings>('/api/settings', {
       method: 'PUT',
-      body: JSON.stringify({ nnueDepth: depth }),
+      body: JSON.stringify({
+        ...(p.mode ? { nnueBudgetMode: p.mode } : {}),
+        ...(p.depth !== undefined ? { nnueDepth: p.depth } : {}),
+        ...(p.budget !== undefined ? { nnueBudget: p.budget } : {}),
+        ...(p.timeMs !== undefined ? { nnueTimeMs: p.timeMs } : {}),
+        ...(p.timeoutMs !== undefined ? { searchTimeoutMs: p.timeoutMs } : {}),
+      }),
     });
-    return resp.nnueDepth;
-  },
-  async setNnueBudget(budget: number) {
-    // PUT /api/settings 部分更新：仅调整 NNUE 默认节点预算（返回钳制后的生效值）
-    const resp = await http<{ nnueBudget: number }>('/api/settings', {
-      method: 'PUT',
-      body: JSON.stringify({ nnueBudget: budget }),
-    });
-    return resp.nnueBudget;
   },
   async mctsGetRoot() {
     return http<MctsRootInfo>(`/api/games/${requireGameId()}/mcts/root`);
