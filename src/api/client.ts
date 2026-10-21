@@ -85,6 +85,9 @@ let currentGameId: string | null = null;
 /// 最近一次快照（getMoveAction 在 HTTP 模式下由本地 legalActions 映射）
 let lastSnapshot: { board: GameState; legal: { action: number; from: number; to: number }[] } | null =
   null;
+/// 最近一次状态中的对手种类（由 server 状态响应 `ai.kind` 下发；
+/// loadFen 沿用当前对手设置与 Tauri 语义一致）
+let lastOpponentKind: Opponent | null = null;
 
 /** server CellView → 前端 Slot 字符串（"R_Sol" / "B_Gen" / "Hidden" / "Empty"）。 */
 function cellToSlot(cell: {
@@ -163,6 +166,9 @@ function adaptServerState(s: any): { state: GameState; terminated: boolean; trun
     history: Array.isArray(s.history) ? s.history.map(adaptHistoryMove) : [],
   };
   lastSnapshot = { board: state, legal };
+  // 记录对手种类（server GameStateResp.ai.kind："PvP" / "Random" / … 与前端枚举一致）
+  const kind = s.ai?.kind;
+  if (typeof kind === 'string' && kind.length > 0) lastOpponentKind = kind as Opponent;
   const winner = s.winner === 'red' ? 1 : s.winner === 'black' ? -1 : s.winner === 'draw' ? 0 : 0;
   return { state, terminated: !!s.terminated, truncated: !!s.truncated, winner };
 }
@@ -276,19 +282,21 @@ const tauriApi = {
 
 const restApi = {
   async resetGame(opponent: Opponent, variant: Variant, modelFile?: string) {
-    // server 支持 MctsOnnx / Nnue 两类 AI 对手（其余规则对手 / PvP 为 Tauri 专属）
-    if (opponent !== 'MctsOnnx' && opponent !== 'Nnue') {
-      throw new RestError(`HTTP 后端暂不支持对手 ${opponent}（仅 MctsOnnx / Nnue）`);
+    // torch 推理（MctsDL）为 Tauri 专属；其余对手 server 全量支持
+    // （PvP / Random / RevealFirst / CaptureFirst / Engine / MctsOnnx / Nnue）
+    if (opponent === 'MctsDL') {
+      throw new RestError(`HTTP 后端不支持对手 ${opponent}（torch 推理为 Tauri 专属）`);
     }
+    const isModelKind = opponent === 'MctsOnnx' || opponent === 'Nnue';
     const created = await http<{ gameId: string; state: unknown }>('/api/games', {
       method: 'POST',
       body: JSON.stringify({
         variant,
-        aiEnabled: true,
-        // 用户选择的模型与对局绑定（.onnx → MCTS+ONNX，.nnue → Expectimax+NNUE）；
-        // 未选择时服务端按变体 ID 自动匹配唯一候选
-        // （同变体多候选模型时服务端会报歧义错误，要求显式选择）
-        ...(modelFile ? { modelFile } : {}),
+        opponent,
+        // 模型类对手：用户选择的模型与对局绑定（.onnx → MCTS+ONNX，.nnue → Expectimax+NNUE）；
+        // 缺省时服务端按变体 ID 自动匹配唯一候选（多候选时报歧义错误，要求显式选择）。
+        // 规则 / Engine 对手无模型，忽略 modelFile。
+        ...(isModelKind && modelFile ? { modelFile } : {}),
       }),
     });
     currentGameId = created.gameId;
@@ -296,13 +304,19 @@ const restApi = {
   },
   async loadFen(fen: string, modelFile?: string) {
     // 由 BFEN 局面串重建对局：变体以 BFEN 自带标识为准；走子历史从空开始。
-    // AI 对手沿用「建局即加载」语义；模型缺省时服务端按变体 ID 自动匹配。
+    // 对手类型沿用当前设置（与 Tauri 语义一致）；模型类对手沿用绑定模型
+    // （缺省时服务端按变体 ID 自动匹配）。
+    const opponent =
+      lastOpponentKind && lastOpponentKind !== 'PvP' && lastOpponentKind !== 'MctsDL'
+        ? lastOpponentKind
+        : undefined;
+    const isModelKind = opponent === 'MctsOnnx' || opponent === 'Nnue';
     const created = await http<{ gameId: string; state: unknown }>('/api/games', {
       method: 'POST',
       body: JSON.stringify({
         fen,
-        aiEnabled: true,
-        ...(modelFile ? { modelFile } : {}),
+        ...(opponent ? { opponent } : { aiEnabled: true }),
+        ...(modelFile && (isModelKind || !opponent) ? { modelFile } : {}),
       }),
     });
     currentGameId = created.gameId;
@@ -342,9 +356,9 @@ const restApi = {
     return resp.variants;
   },
   async getOpponentType(): Promise<Opponent> {
-    // server 在 /move 内已自动执行 AI 回合（含 mcts_stats），
-    // 前端无需再触发 botMove，故按“无需客户端补走”的语义返回 PvP
-    return 'PvP';
+    // 对手种类由状态响应 ai.kind 下发（创建/走子/查询后均有最新值）；
+    // 尚未收到任何状态时按「无需客户端补走」语义返回 PvP
+    return lastOpponentKind ?? 'PvP';
   },
   async getMoveAction(fromSq: number, toSq: number) {
     if (!lastSnapshot) return null;
@@ -380,8 +394,13 @@ const restApi = {
     });
     return resp.mctsSims;
   },
-  setEngineBudget() {
-    return Promise.reject(new RestError('HTTP 后端暂不支持（见 docs/backend-api.md）'));
+  async setEngineBudget(budget: number) {
+    // PUT /api/settings 部分更新：仅调整 Expectimax 强引擎默认节点预算
+    const resp = await http<{ engineBudget: number }>('/api/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ engineBudget: budget }),
+    });
+    return resp.engineBudget;
   },
   async setNnueDepth(depth: number) {
     // PUT /api/settings 部分更新：仅调整 NNUE 默认搜索深度（返回钳制后的生效值）
