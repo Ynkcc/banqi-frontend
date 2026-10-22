@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import type { Opponent } from '../api/types';
-import { isTauri } from '../api/client';
 import { variantsReady } from '../domain/variants';
 import { useGame } from '../composables/useGame';
 import { useSettings } from '../composables/useSettings';
@@ -15,7 +14,6 @@ const {
   nnueModels,
   modelsDir,
   refreshModels,
-  openModelsDir,
   applyEngineBudget,
   applyMctsIters,
   applyNnue,
@@ -181,7 +179,7 @@ async function onLoadFen() {
       </div>
       <label class="field">
         <span>预算模式</span>
-        <select v-model="settings.nnueBudgetMode" :disabled="isTauri()">
+        <select v-model="settings.nnueBudgetMode">
           <option value="nodes">纯节点预算</option>
           <option value="depth_nodes">深度 + 节点预算</option>
           <option value="time">用时</option>
@@ -199,7 +197,7 @@ async function onLoadFen() {
         <span>时间预算（毫秒）</span>
         <input v-model.number="settings.nnueTimeMs" type="number" min="1" />
       </label>
-      <label v-if="!isTauri()" class="field">
+      <label class="field">
         <span>搜索超时（毫秒）</span>
         <input v-model.number="settings.searchTimeoutMs" type="number" min="1" />
       </label>
@@ -208,7 +206,6 @@ async function onLoadFen() {
         搜索超时为硬上限：超时放弃后续搜索并返回实际结果（默认 60 秒）。
         模型特征维度需与所选变体匹配；应用设置对之后创建的对局生效。
       </p>
-      <p v-if="isTauri()" class="hint">桌面端预算模式固定为「深度 + 节点预算」，硬超时 60 秒。</p>
     </section>
 
     <section class="panel-card">
@@ -229,9 +226,8 @@ async function onLoadFen() {
 
     <section class="panel-card">
       <h3>模型目录</h3>
-      <p class="hint">把 .pt / .onnx / .nnue 文件复制到此目录（含子目录）后，点上方「刷新列表」即可选中。</p>
+      <p class="hint">服务器模型目录（含子目录）：把 .pt / .onnx / .nnue 文件放入后，点上方「刷新列表」即可选中。</p>
       <p class="hint">{{ modelsDir || '读取中…' }}</p>
-      <button :disabled="store.busy" @click="openModelsDir">打开模型目录</button>
     </section>
   </div>
 </template>

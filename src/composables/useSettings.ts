@@ -23,7 +23,7 @@ const DEFAULTS = {
   nnueBudget: 200000,
   /** NNUE 时间预算毫秒（time 模式生效） */
   nnueTimeMs: 5000,
-  /** 搜索硬超时毫秒（全模式必选生效，默认 60s；仅 REST 后端可调） */
+  /** 搜索硬超时毫秒（全模式必选生效，默认 60s） */
   searchTimeoutMs: 60000,
   /** 选中的 MCTS 模型（.pt / .onnx），随设置持久化 */
   ptModel: '',
@@ -105,7 +105,7 @@ const capabilities = reactive<Capabilities>({ torch: false, onnx: false });
 const ptModels = ref<ModelEntry[]>([]);
 const nnueModels = ref<ModelEntry[]>([]);
 const modelsLoading = ref(false);
-/** 固定模型目录（~/banqi-models）的绝对路径，由后端在启动时确定 */
+/** 服务器模型目录的绝对路径（--models 参数），由后端下发 */
 const modelsDir = ref('');
 
 /** 读取后端编译期启用的推理后端（.pt 需 torch，.onnx 需 onnx，.nnue 无依赖）。 */
@@ -138,16 +138,6 @@ async function refreshModels() {
     toast.error('加载模型列表失败: ' + e);
   } finally {
     modelsLoading.value = false;
-  }
-}
-
-/** 在系统文件管理器中打开固定模型目录（把模型复制进去后点「刷新列表」即可）。 */
-async function openModelsDir() {
-  try {
-    await api.openModelsDir();
-  } catch (e) {
-    console.error('open_models_dir failed:', e);
-    toast.error('打开模型目录失败: ' + e);
   }
 }
 
@@ -185,7 +175,7 @@ async function applyNnue(): Promise<boolean> {
       timeMs: settings.nnueTimeMs,
       timeoutMs: settings.searchTimeoutMs,
     });
-    // 回填服务器钳制后的生效值（REST 下发全量快照；Tauri 仅深度/节点预算）
+    // 回填服务器钳制后的生效值（全量快照）
     settings.nnueDepth = s.nnueDepth;
     settings.nnueBudget = s.nnueBudget;
     if (s.nnueBudgetMode) settings.nnueBudgetMode = s.nnueBudgetMode;
@@ -229,7 +219,6 @@ export function useSettings() {
     modelsLoading,
     modelsDir,
     refreshModels,
-    openModelsDir,
     applyEngineBudget,
     applyMctsIters,
     applyNnue,

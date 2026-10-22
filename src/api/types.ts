@@ -1,4 +1,4 @@
-/** 后端 Tauri command 返回的数据结构（与 src-tauri/src/main.rs 中 serde 序列化一一对应）。 */
+/** 后端 API 契约的单一真源（与 banqi-server DTO serde 序列化逐字段对应，snake_case 直传）。 */
 
 export type Player = 'Red' | 'Black';
 export type Slot = 'Empty' | 'Hidden' | string; // 明子格式: "R_Sol" / "B_Gen" ...
@@ -23,7 +23,7 @@ export interface GameState {
    * 不编码 last_action 与 true_board（见 banqi-core fen.rs）。
    */
   fen?: string;
-  /** server 契约字段（camelCase→snake_case 适配）：是否轮到 AI 行动。Tauri 后端为 undefined。 */
+  /** 是否轮到 AI 行动（server 下发）。 */
   ai_to_move?: boolean;
   /**
    * 是否可悔棋（两后端均下发）：悔棋仅在当前行棋方尚未行动时可用，
@@ -35,6 +35,26 @@ export interface GameState {
    * 翻棋 / 吃暗子（含炮打暗子）附实际翻出的棋子；悔棋后由后端同步截断。
    */
   history?: HistoryMove[];
+  /** server 扩展：对局绑定的对手信息（PvP 时 enabled=false）。 */
+  ai?: AiInfo;
+}
+
+/** server 扩展：对手信息视图（对齐 banqi-server `AiInfoView`）。 */
+export interface AiInfo {
+  enabled: boolean;
+  /** 对手种类："PvP" / "Random" / "RevealFirst" / "CaptureFirst" / "Engine" / "Nnue" / "MctsOnnx" / "MctsDL" */
+  kind: string;
+  /** 对手执子方："red" / "black" */
+  player?: string;
+  /** 推理后端："mcts-onnx" / "nnue" / "mcts-dl" */
+  engine?: string;
+  mcts_sims: number;
+  engine_budget?: number;
+  budget_mode?: string;
+  nnue_depth?: number;
+  nnue_budget?: number;
+  nnue_time_ms?: number;
+  search_timeout_ms?: number;
 }
 
 /** 一手棋的决策记录（棋谱项）。棋子字段为前端短码格式（"R_Sol" / "B_Gen" …）。 */
@@ -102,17 +122,17 @@ export interface NnueSearchStats {
 /** Expectimax 搜索预算模式（与 banqi-app BudgetMode 契约一致）。 */
 export type NnueBudgetMode = 'nodes' | 'depth_nodes' | 'time';
 
-/** set_engine_settings / PUT /api/settings 返回：引擎搜索参数生效快照（camelCase）。 */
+/** PUT /api/settings 返回：引擎搜索参数生效快照（camelCase）。 */
 export interface EngineSettings {
   mctsSims: number;
   engineBudget: number;
-  /** NNUE 预算模式（仅 REST 后端支持；Tauri 固定为 depth_nodes） */
+  /** NNUE 预算模式 */
   nnueBudgetMode?: NnueBudgetMode;
   nnueDepth: number;
   nnueBudget: number;
-  /** NNUE 时间预算毫秒（time 模式生效；仅 REST 后端支持） */
+  /** NNUE 时间预算毫秒（time 模式生效） */
   nnueTimeMs?: number;
-  /** 搜索硬超时毫秒（全模式必选生效；仅 REST 后端可调，Tauri 固定 60s） */
+  /** 搜索硬超时毫秒（全模式必选生效） */
   searchTimeoutMs?: number;
 }
 
@@ -143,7 +163,7 @@ export interface ModelEntry {
   path: string;
 }
 
-/** list_models 返回：固定模型目录（~/banqi-models）及其中的模型文件。 */
+/** GET /api/models 返回：服务器模型目录及其中的模型文件。 */
 export interface ModelList {
   dir: string;
   models: ModelEntry[];
@@ -153,7 +173,7 @@ export interface ModelList {
 export interface Capabilities {
   torch: boolean;
   onnx: boolean;
-  /** NNUE 推理（无外部依赖）；Tauri 旧版后端可能不下发该字段 */
+  /** NNUE 推理（无外部依赖） */
   nnue?: boolean;
 }
 
@@ -187,7 +207,7 @@ export interface MctsRootInfo {
   stats: MctsSearchStats;
 }
 
-/** mcts_get_node_board 返回：某节点保存的完整局面（信息状态视角）+ 到达该节点的着法所在格。 */
+/** GET /api/games/:id/mcts/node/:node/board 返回：某节点保存的完整局面（信息状态视角）+ 到达该节点的着法所在格。 */
 export interface MctsNodeBoard {
   state: GameState;
   move_coords: number[];
