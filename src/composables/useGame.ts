@@ -400,9 +400,34 @@ function slotKindLabel(kind: SlotKind): string {
   return labels[kind] ?? kind;
 }
 
-/** 对局中切换任一方槽位（PUT /slots；后续触发由状态侦听器统一反应）。 */
+/** 对局中切换任一方槽位（PUT /slots；后续触发由状态侦听器统一反应）。
+ *
+ * 自动对弈进行中点击「解除托管」时，在途策略步（搜索可达数秒）会把 busy 拉满，
+ * 此处不能静默丢弃请求：先停止自动对弈并等待在途操作结束，再提交槽位切换。
+ * 等待期间 slotsChangePending 挂起状态侦听器，防止循环被重启。
+ */
+let slotsChangePending = false;
+
 async function applySlots(partial: { red?: SlotCfg; black?: SlotCfg }) {
-  if (store.busy || !store.state) return;
+  if (!store.state || slotsChangePending) return;
+  if (store.busy) {
+    slotsChangePending = true;
+    store.autoEnabled = false;
+    appendLog('切换槽位: 等待在途策略步结束后提交…');
+    const deadline = Date.now() + 60_000;
+    while (store.busy && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    if (store.busy) {
+      slotsChangePending = false;
+      toast.error('在途策略步耗时过长，槽位切换未生效，请稍后重试', 4000);
+      return;
+    }
+  } else {
+    // 空闲提交也可能与自动对弈下一步并发：同样先挂起循环再请求
+    slotsChangePending = true;
+    store.autoEnabled = false;
+  }
   try {
     const sideLabel = (s: 'red' | 'black') =>
       partial[s] ? `${s === 'red' ? '红方' : '黑方'}→${slotKindLabel(partial[s]!.kind)}` : '';
@@ -413,6 +438,8 @@ async function applySlots(partial: { red?: SlotCfg; black?: SlotCfg }) {
   } catch (e) {
     console.error('Set slots failed:', e);
     toast.error('切换槽位失败: ' + e);
+  } finally {
+    slotsChangePending = false;
   }
 }
 
@@ -556,6 +583,12 @@ watch(
         store.autoEnabled = false;
         appendLog('对局结束，自动对弈停止');
       }
+      return;
+    }
+    // 槽位切换请求在途（等待在途策略步结束 / 请求提交中）：
+    // 挂起自动对弈调度，等 applySlots 提交完成后的新状态再统一反应
+    if (slotsChangePending) {
+      store.autoEnabled = false;
       return;
     }
     if (bothSidesAutomated()) {
