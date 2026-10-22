@@ -10,6 +10,8 @@ const props = defineProps<{
   highlights?: Map<number, { type: 'move' | 'capture' }>;
   actionMasks?: number[] | null;
   markers?: number[];
+  /** dry-run 建议走法的 from/to（策略建议高亮；翻棋时 from == to） */
+  suggest?: { from: number; to: number } | null;
   readonly?: boolean;
 }>();
 
@@ -23,6 +25,13 @@ const boardStyle = computed(() => ({
 
 const markerSet = computed(() => new Set(props.markers ?? []));
 
+const suggestSet = computed(() => {
+  if (!props.suggest) return new Set<number>();
+  return props.suggest.from === props.suggest.to
+    ? new Set([props.suggest.to])
+    : new Set([props.suggest.from, props.suggest.to]);
+});
+
 function cellClass(idx: number): string[] {
   const slot = props.board[idx] ?? 'Empty';
   const classes = ['chess-cell'];
@@ -35,6 +44,7 @@ function cellClass(idx: number): string[] {
   const hl = props.highlights?.get(idx);
   if (hl) classes.push(hl.type === 'capture' ? 'legal-capture' : 'legal-move');
   if (markerSet.value.has(idx)) classes.push('move-marker');
+  if (suggestSet.value.has(idx)) classes.push('suggest-cell');
   if (props.readonly) classes.push('static');
   return classes;
 }

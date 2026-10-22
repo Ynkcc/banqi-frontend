@@ -1,86 +1,30 @@
 import { reactive, ref, watch } from 'vue';
 import { api } from '../api/client';
-import type { Capabilities, ModelEntry, NnueBudgetMode, Opponent, Variant } from '../api/types';
-import { appendLog } from './useLogs';
+import type { Capabilities, ModelEntry, Variant } from '../api/types';
 import { useToast } from './useToast';
 
 const toast = useToast();
 
 // ============================================================================
-// 设置持久化（localStorage）：变体 / 对手 / 各引擎参数 / 选中模型随页面刷新保留。
+// 设置持久化（localStorage）：变体随页面刷新保留。
 // ============================================================================
 
-const STORAGE_KEY = 'banqi:settings:v1';
+const STORAGE_KEY = 'banqi:settings:v3';
 
 const DEFAULTS = {
   variant: '4x8' as Variant,
-  opponent: 'PvP' as Opponent,
-  engineLevel: 300000,
-  mctsIters: 200,
-  /** NNUE 预算模式：纯节点预算 / 深度+节点预算 / 用时 */
-  nnueBudgetMode: 'depth_nodes' as NnueBudgetMode,
-  nnueDepth: 8,
-  nnueBudget: 200000,
-  /** NNUE 时间预算毫秒（time 模式生效） */
-  nnueTimeMs: 5000,
-  /** 搜索硬超时毫秒（全模式必选生效，默认 60s） */
-  searchTimeoutMs: 60000,
-  /** 选中的 MCTS 模型（.pt / .onnx），随设置持久化 */
-  ptModel: '',
-  /** 选中的 NNUE 模型（.nnue），随设置持久化 */
-  nnueModel: '',
 };
-
-const NNUE_BUDGET_MODES: NnueBudgetMode[] = ['nodes', 'depth_nodes', 'time'];
-
-const NNUE_MODE_LABELS: Record<NnueBudgetMode, string> = {
-  nodes: '纯节点预算',
-  depth_nodes: '深度+节点预算',
-  time: '用时',
-};
-
-const OPPONENT_VALUES: Opponent[] = [
-  'PvP',
-  'Random',
-  'RevealFirst',
-  'CaptureFirst',
-  'MctsDL',
-  'MctsOnnx',
-  'Engine',
-  'Nnue',
-];
 
 function asStr(v: unknown): string | undefined {
   return typeof v === 'string' ? v : undefined;
-}
-
-function asPosInt(v: unknown, fallback: number): number {
-  const n = typeof v === 'number' ? v : Number(v);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
 }
 
 /** 读取并清洗持久化数据：类型不符 / 非法值回退默认（localStorage 内容不可信）。 */
 function loadPersisted(): Partial<typeof DEFAULTS> {
   try {
     const raw: Record<string, unknown> = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
-    const opponent = asStr(raw.opponent);
-    const nnueBudgetMode = asStr(raw.nnueBudgetMode);
     return {
       variant: asStr(raw.variant),
-      opponent: opponent && OPPONENT_VALUES.includes(opponent as Opponent)
-        ? (opponent as Opponent)
-        : undefined,
-      engineLevel: asPosInt(raw.engineLevel, DEFAULTS.engineLevel),
-      mctsIters: asPosInt(raw.mctsIters, DEFAULTS.mctsIters),
-      nnueBudgetMode: nnueBudgetMode && NNUE_BUDGET_MODES.includes(nnueBudgetMode as NnueBudgetMode)
-        ? (nnueBudgetMode as NnueBudgetMode)
-        : undefined,
-      nnueDepth: asPosInt(raw.nnueDepth, DEFAULTS.nnueDepth),
-      nnueBudget: asPosInt(raw.nnueBudget, DEFAULTS.nnueBudget),
-      nnueTimeMs: asPosInt(raw.nnueTimeMs, DEFAULTS.nnueTimeMs),
-      searchTimeoutMs: asPosInt(raw.searchTimeoutMs, DEFAULTS.searchTimeoutMs),
-      ptModel: asStr(raw.ptModel),
-      nnueModel: asStr(raw.nnueModel),
     };
   } catch {
     return {};
@@ -141,74 +85,6 @@ async function refreshModels() {
   }
 }
 
-async function applyEngineBudget(): Promise<boolean> {
-  try {
-    const result = await api.setEngineBudget(settings.engineLevel);
-    appendLog(`强引擎节点预算已设置为 ${result}`);
-    toast.success(`强引擎节点预算已设置为 ${result}`);
-    return true;
-  } catch (e) {
-    toast.error('设置失败: ' + e);
-    return false;
-  }
-}
-
-async function applyMctsIters(): Promise<boolean> {
-  try {
-    const result = await api.setMctsIterations(settings.mctsIters);
-    settings.mctsIters = result;
-    appendLog(`MCTS 搜索次数已设置为 ${result}`);
-    toast.success('MCTS 搜索次数已设置为 ' + result);
-    return true;
-  } catch (e) {
-    toast.error('设置失败: ' + e);
-    return false;
-  }
-}
-
-async function applyNnue(): Promise<boolean> {
-  try {
-    const s = await api.setNnueSettings({
-      mode: settings.nnueBudgetMode,
-      depth: settings.nnueDepth,
-      budget: settings.nnueBudget,
-      timeMs: settings.nnueTimeMs,
-      timeoutMs: settings.searchTimeoutMs,
-    });
-    // 回填服务器钳制后的生效值（全量快照）
-    settings.nnueDepth = s.nnueDepth;
-    settings.nnueBudget = s.nnueBudget;
-    if (s.nnueBudgetMode) settings.nnueBudgetMode = s.nnueBudgetMode;
-    if (typeof s.nnueTimeMs === 'number') settings.nnueTimeMs = s.nnueTimeMs;
-    if (typeof s.searchTimeoutMs === 'number') settings.searchTimeoutMs = s.searchTimeoutMs;
-    const modeLabel = NNUE_MODE_LABELS[settings.nnueBudgetMode];
-    const detail =
-      settings.nnueBudgetMode === 'time'
-        ? `时限 ${settings.nnueTimeMs} ms`
-        : `深度 ${settings.nnueDepth} / 节点预算 ${settings.nnueBudget}`;
-    appendLog(
-      `NNUE 设置已应用（${modeLabel}）：${detail}，硬超时 ${settings.searchTimeoutMs} ms`,
-    );
-    toast.success(`NNUE 设置已应用（${modeLabel}）：${detail}`);
-    return true;
-  } catch (e) {
-    toast.error('设置失败: ' + e);
-    return false;
-  }
-}
-
-async function loadModel(path: string): Promise<boolean> {
-  try {
-    const result = await api.loadModel(path);
-    appendLog(result);
-    toast.success('模型加载成功：' + result);
-    return true;
-  } catch (e) {
-    toast.error('模型加载失败：' + e, 5000);
-    return false;
-  }
-}
-
 export function useSettings() {
   return {
     settings,
@@ -219,9 +95,5 @@ export function useSettings() {
     modelsLoading,
     modelsDir,
     refreshModels,
-    applyEngineBudget,
-    applyMctsIters,
-    applyNnue,
-    loadModel,
   };
 }

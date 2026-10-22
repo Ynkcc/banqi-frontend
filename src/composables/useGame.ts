@@ -1,6 +1,6 @@
-import { computed, reactive } from 'vue';
+import { computed, reactive, watch } from 'vue';
 import { api } from '../api/client';
-import type { GameState, HistoryMove, Opponent, Slot, Variant } from '../api/types';
+import type { GameState, HistoryMove, Slot, SlotCfg, SlotsCfg, SlotKind, Suggestion, Variant } from '../api/types';
 import { variantMaxConsecutive } from '../domain/variants';
 import { appendLog } from './useLogs';
 import { useToast } from './useToast';
@@ -23,6 +23,10 @@ interface GameStore {
   canUndo: boolean;
   /** 决策历史面板当前选中查看的手数（null = 未选中；选中时棋盘高亮 from/to） */
   inspectPly: number | null;
+  /** dry-run 建议走法（null = 无；仅当 version 与当前状态一致时展示高亮） */
+  suggestion: Suggestion | null;
+  /** auto 自动对弈开关（前端循环调 run；切槽位到 Human / 终局 / 手动暂停即停） */
+  autoEnabled: boolean;
 }
 
 const store = reactive<GameStore>({
@@ -33,6 +37,8 @@ const store = reactive<GameStore>({
   lastResult: null,
   canUndo: false,
   inspectPly: null,
+  suggestion: null,
+  autoEnabled: false,
 });
 
 /**
@@ -169,6 +175,7 @@ async function applyStep(prev: GameState, result: { state: GameState } & { termi
   store.moveHighlights = new Map();
   store.canUndo = !!result.state.can_undo;
   store.inspectPly = null;
+  store.suggestion = null;
   checkGameOver(result);
 }
 
@@ -201,57 +208,99 @@ function logNnueStats(stats: NonNullable<import('../api/types').StepResult['nnue
 }
 
 /**
- * 触发 AI 行动（仅当确实轮到 AI 时）。
- *
- * 轮次判定：
- * - REST（banqi-server）：以契约字段 `ai_to_move` 为准。注意 server 的 /move
- *   在人类走子后已自动完成 AI 回合并一并返回，此时 ai_to_move 为 false，
- *   不会再调用 /ai-move（否则 409 NOT_AI_TURN）。
- * - Tauri：ai_to_move 为 undefined，退化为「走子后行棋方是否切换」判断
- *   （同一玩家连走时不轮到 AI）。
+ * 单步推进：当前行棋方按其槽位策略执行一步（run）。
+ * 仅当当前方为策略（can_run）时可用；Human 方调用会得到 409 HUMAN_TURN。
  */
-async function maybeBotTurn() {
+async function runStep() {
   const s = store.state;
-  if (!s || store.busy) return;
-  if (s.ai_to_move === false) return;
+  if (!s || store.busy || !s.can_run) return;
+  store.busy = true;
   try {
-    const opp = await api.getOpponentType();
-    if (opp === 'PvP') return;
-    store.busy = true;
     const prev = store.state;
     if (!prev) return;
-    const result = await api.botMove();
+    const result = await api.runStep();
     await applyStep(prev, result);
     if (result.mcts_stats) logMctsStats(result.mcts_stats);
     if (result.nnue_stats) logNnueStats(result.nnue_stats);
   } catch (e) {
-    console.error('bot_move skipped or failed:', e);
-    toast.error('电脑行动失败: ' + e);
+    console.error('run_step failed:', e);
+    toast.error('策略走子失败: ' + e);
   } finally {
     store.busy = false;
   }
 }
 
+/**
+ * auto 自动对弈：循环调 run 直到终局 / 当前方变为 Human / 建议变更打断。
+ * 每步后重新检查状态（终局、can_run、autoEnabled），人类可随时接管
+ * （把当前方槽位切回 Human 即自然停止）。
+ */
+async function autoLoop() {
+  while (store.autoEnabled && store.state && store.state.can_run && !store.busy) {
+    const over = store.lastResult?.terminated || store.lastResult?.truncated;
+    if (over) break;
+    await runStep();
+    // runStep 失败时 toast 已提示；停止循环避免刷屏
+    if (store.state && store.lastResult) {
+      const r = store.lastResult;
+      if (r.terminated || r.truncated) break;
+    } else {
+      break;
+    }
+  }
+  store.autoEnabled = false;
+}
+
+/** 双方槽位是否均已托管（策略 / Agent）——托管完成后自动对弈的自然入口。 */
+function bothSidesAutomated(): boolean {
+  const s = store.state;
+  return !!s?.slots && s.slots.red.kind !== 'Human' && s.slots.black.kind !== 'Human';
+}
+
+/**
+ * dry-run：为当前行棋方请求其策略的建议走法并高亮（不落子）。
+ * 托管方预览 AI 将走的棋；Human 方作为提示（服务端缺省用 Expectimax）。
+ * 建议仅在版本号一致时展示，任何状态变更（走子/悔棋/策略回合）即失效。
+ */
+async function requestDryRun() {
+  const s = store.state;
+  if (!s || store.busy) return;
+  store.busy = true;
+  try {
+    store.suggestion = null;
+    const suggestion = await api.dryRun();
+    // 版本号校验：请求期间状态变化则丢弃（防过期高亮）
+    if (store.state && suggestion.version === store.state.version) {
+      store.suggestion = suggestion;
+      const desc = suggestion.is_flip
+        ? `翻棋 位置${suggestion.to}`
+        : `位置${suggestion.from} → 位置${suggestion.to}`;
+      const scoreText = suggestion.score !== undefined ? `（评分 ${suggestion.score.toFixed(3)}）` : '';
+      appendLog(`[dry-run] ${suggestion.player === 'Red' ? '红方' : '黑方'} 建议走法: ${desc}${scoreText}`);
+    }
+  } catch (e) {
+    console.error('dry_run failed:', e);
+    toast.error('获取建议走法失败: ' + e);
+  } finally {
+    store.busy = false;
+  }
+}
+
+/** 清除 dry-run 建议（状态变化 / 用户点击时）。 */
+function clearSuggestion() {
+  store.suggestion = null;
+}
+
 async function doMove(action: number) {
   if (!store.state || store.busy) return;
   const prev = store.state;
-  const mover = prev.current_player;
   store.busy = true;
   try {
     const result = await api.stepGame(action);
     await applyStep(prev, result);
-    // REST 模式：server 在 /move 内已代跑 AI 回合，此处附带其搜索统计
+    // server 在 /move 内已代跑对方策略回合，此处附带其搜索统计
     if (result.mcts_stats) logMctsStats(result.mcts_stats);
     if (result.nnue_stats) logNnueStats(result.nnue_stats);
-    const next = result.state;
-    if (
-      !(result.terminated || result.truncated) &&
-      // REST: server 已代跑 AI 回合，ai_to_move 为 false 时直接跳过；
-      // Tauri: 未提供该字段（undefined）时用行棋方是否切换兜底。
-      (next.ai_to_move === true || (next.ai_to_move === undefined && next.current_player !== mover))
-    ) {
-      await maybeBotTurn();
-    }
   } catch (e) {
     toast.error('操作失败: ' + e);
   } finally {
@@ -279,6 +328,7 @@ async function undoMove() {
     store.moveHighlights = new Map();
     store.canUndo = !!result.state.can_undo;
     store.inspectPly = null;
+    store.suggestion = null;
   } catch (e) {
     console.error('Undo failed:', e);
     toast.error('悔棋失败: ' + e);
@@ -290,6 +340,11 @@ async function undoMove() {
 async function onSquareClick(idx: number) {
   const s = store.state;
   if (!s || store.busy) return;
+  // 当前方为策略托管：不接受手动走子（接管请先将该方槽位切回 Human）
+  if (s.can_run) {
+    toast.info('当前行棋方由策略托管（接管请先将该方槽位切回本人操作）', 2500);
+    return;
+  }
   const slot = s.board[idx];
 
   if (store.selectedSquare === null) {
@@ -329,23 +384,55 @@ function deselect() {
   }
 }
 
-async function resetGame(opponent: Opponent, variant: Variant, modelFile?: string) {
+/** 槽位种类的可读标签。 */
+function slotKindLabel(kind: SlotKind): string {
+  const labels: Record<SlotKind, string> = {
+    Human: '本人操作',
+    Agent: 'Agent',
+    Random: '随机',
+    RevealFirst: '优先翻棋',
+    CaptureFirst: '优先吃子',
+    Expectimax: 'Expectimax',
+    ExpectimaxNnue: 'Expectimax+NNUE',
+    MctsOnnx: 'MCTS+ONNX',
+    MctsDL: 'MCTS+DL',
+  };
+  return labels[kind] ?? kind;
+}
+
+/** 对局中切换任一方槽位（PUT /slots；后续触发由状态侦听器统一反应）。 */
+async function applySlots(partial: { red?: SlotCfg; black?: SlotCfg }) {
+  if (store.busy || !store.state) return;
+  try {
+    const sideLabel = (s: 'red' | 'black') =>
+      partial[s] ? `${s === 'red' ? '红方' : '黑方'}→${slotKindLabel(partial[s]!.kind)}` : '';
+    appendLog(`切换槽位: ${[sideLabel('red'), sideLabel('black')].filter(Boolean).join('，')}`);
+    store.state = await api.setSlots(partial);
+    store.canUndo = !!store.state.can_undo;
+    store.suggestion = null;
+  } catch (e) {
+    console.error('Set slots failed:', e);
+    toast.error('切换槽位失败: ' + e);
+  }
+}
+
+async function resetGame(slots: SlotsCfg, variant: Variant) {
   if (store.busy) return;
   store.selectedSquare = null;
   store.moveHighlights = new Map();
   store.inspectPly = null;
+  store.suggestion = null;
   try {
     appendLog(
-      `开始新游戏（变体 ${variant}，对手 ${opponent}` +
-        `${modelFile ? `，模型 ${modelFile}` : ''}）`,
+      `开始新游戏（变体 ${variant}，红方 ${slotKindLabel(slots.red.kind)}` +
+        `，黑方 ${slotKindLabel(slots.black.kind)}` +
+        `${slots.red.model_file ? `，红方模型 ${slots.red.model_file}` : ''}` +
+        `${slots.black.model_file ? `，黑方模型 ${slots.black.model_file}` : ''}）`,
     );
-    store.state = await api.resetGame(opponent, variant, modelFile);
+    store.state = await api.resetGame(slots, variant);
     store.lastResult = null;
     store.canUndo = !!store.state.can_undo;
-    // AI 执先手时（REST 契约 ai_to_move），开局即触发 AI 行动
-    if (store.state.ai_to_move === true) {
-      await maybeBotTurn();
-    }
+    // 策略回合 / 自动对弈由状态侦听器统一反应（见下方 watch）
   } catch (e) {
     console.error('Reset game failed:', e);
     toast.error('重置游戏失败: ' + e);
@@ -389,22 +476,20 @@ async function copyFen() {
 }
 
 /** 由 BFEN 局面串重建对局（变体以 BFEN 为准；走子历史清空，不可悔棋）。
- *  modelFile：AI 对局绑定的模型（.onnx → MCTS+ONNX，.nnue → Expectimax+NNUE）。 */
-async function loadFen(fenInput: string, modelFile?: string) {
+ *  槽位配置沿用当前设置（模型类策略沿用绑定模型）。 */
+async function loadFen(fenInput: string) {
   const fen = fenInput.trim();
   if (!fen || store.busy) return;
   store.selectedSquare = null;
   store.moveHighlights = new Map();
   store.inspectPly = null;
+  store.suggestion = null;
   try {
-    store.state = await api.loadFen(fen, modelFile);
+    store.state = await api.loadFen(fen);
     store.lastResult = null;
     store.canUndo = !!store.state.can_undo;
     appendLog(`由 FEN 重建对局（变体 ${store.state.variant}）: ${fen}`);
-    // 重建后轮到 AI 时（REST 契约 ai_to_move），立即触发 AI 行动
-    if (store.state.ai_to_move === true) {
-      await maybeBotTurn();
-    }
+    // 重建后轮到策略方时（can_run 契约），由状态侦听器统一反应
   } catch (e) {
     console.error('Load FEN failed:', e);
     toast.error('重建对局失败: ' + e);
@@ -434,12 +519,72 @@ const inspectMarkers = computed<number[]>(() => {
   return m ? (m.from === m.to ? [m.to] : [m.from, m.to]) : [];
 });
 
+/**
+ * dry-run 建议走法的 from/to（供 BoardView 传给 BoardGrid suggest 高亮）。
+ * 仅当建议版本号与当前状态版本号一致时有效（防过期高亮）。
+ */
+const suggestionSquares = computed<{ from: number; to: number } | null>(() => {
+  const sug = store.suggestion;
+  if (!sug || !store.state || sug.version !== store.state.version) return null;
+  return { from: sug.from, to: sug.to };
+});
+
+// ============================================================================
+// 事件响应式调度（单一调度点）
+//
+// 状态（store.state）是唯一事实源：任何来源的变更——人类走子 / run 单步 /
+// 换槽位 / FEN 重建 / 页面加载恢复——都经此侦听器统一反应，取代散落在
+// 各 handler 里的手动触发。规则：
+//
+// - 无对局 / 终局 → 停止自动对弈；
+// - 双方均已托管（策略 / Agent）且轮到策略方 → 启动自动对弈循环
+//   （幂等：已在跑则不重复启动；循环每步产出的新状态再次进入本侦听器）；
+// - 任一方为 Human → 停止循环（解除任一方托管即人类接管 / 暂停）；
+// - 单方托管且轮到该方（刚换槽位 / 恢复进行中的对局）→ 该方走一步。
+// ============================================================================
+
+watch(
+  () => store.state,
+  (s) => {
+    if (!s) {
+      store.autoEnabled = false;
+      return;
+    }
+    if (s.over) {
+      if (store.autoEnabled) {
+        store.autoEnabled = false;
+        appendLog('对局结束，自动对弈停止');
+      }
+      return;
+    }
+    if (bothSidesAutomated()) {
+      if (s.can_run && !store.autoEnabled) {
+        store.autoEnabled = true;
+        appendLog('双方均已托管，自动对弈开始（解除任一方托管即暂停）');
+        void autoLoop();
+      }
+      return;
+    }
+    // 存在 Human 方：不开循环；但单方托管且正轮到该方时走一步
+    // （换槽位 / 页面恢复后当前方恰为策略方的场景；busy 时跳过——
+    // 在途操作完成后会带来新状态，再次进入本侦听器）
+    if (store.autoEnabled) {
+      store.autoEnabled = false;
+      appendLog('自动对弈已暂停（人类接管）');
+    }
+    if (s.can_run && !store.busy) {
+      void runStep();
+    }
+  },
+);
+
 export function useGame() {
   return {
     store,
     statusText,
     inspectMarkers,
     inspectMove,
+    suggestionSquares,
     loadInitialState,
     resetGame,
     copyFen,
@@ -448,5 +593,10 @@ export function useGame() {
     onSquareClick,
     deselect,
     isSelectable,
+    runStep,
+    requestDryRun,
+    clearSuggestion,
+    applySlots,
+    slotKindLabel,
   };
 }

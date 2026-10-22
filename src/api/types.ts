@@ -23,11 +23,9 @@ export interface GameState {
    * 不编码 last_action 与 true_board（见 banqi-core fen.rs）。
    */
   fen?: string;
-  /** 是否轮到 AI 行动（server 下发）。 */
-  ai_to_move?: boolean;
   /**
    * 是否可悔棋（两后端均下发）：悔棋仅在当前行棋方尚未行动时可用，
-   * 每次回到自己上次行动前，可连续触发以反悔所有自己的行动（PvP 同语义）。
+   * 每次回到自己上次行动前，可连续触发以反悔所有自己的行动。
    */
   can_undo?: boolean;
   /**
@@ -35,26 +33,126 @@ export interface GameState {
    * 翻棋 / 吃暗子（含炮打暗子）附实际翻出的棋子；悔棋后由后端同步截断。
    */
   history?: HistoryMove[];
-  /** server 扩展：对局绑定的对手信息（PvP 时 enabled=false）。 */
-  ai?: AiInfo;
+  /** server 扩展：红/黑双方选手槽位（Human 或策略托管配置）。 */
+  slots?: SlotsView;
+  /** server 扩展：当前行棋方是否为策略（true 时可 run 单步 / auto 循环）。 */
+  can_run?: boolean;
+  /** server 扩展：单调递增版本号（dry-run 建议等基于版本对齐，防过期） */
+  version?: number;
+  /** server 扩展：对局是否结束（终局或步数截断；自动对弈循环的停止条件） */
+  over?: boolean;
 }
 
-/** server 扩展：对手信息视图（对齐 banqi-server `AiInfoView`）。 */
-export interface AiInfo {
-  enabled: boolean;
-  /** 对手种类："PvP" / "Random" / "RevealFirst" / "CaptureFirst" / "Engine" / "Nnue" / "MctsOnnx" / "MctsDL" */
-  kind: string;
-  /** 对手执子方："red" / "black" */
-  player?: string;
-  /** 推理后端："mcts-onnx" / "nnue" / "mcts-dl" */
-  engine?: string;
-  mcts_sims: number;
+// ============================================================================
+// 选手槽位（对局与玩家/策略解耦的契约核心）
+// ============================================================================
+
+/** 策略种类（与 banqi-server `StrategyKind::as_str` 一致；Human 槽位为 "Human"）。 */
+export type StrategyKind =
+  | 'Random'
+  | 'RevealFirst'
+  | 'CaptureFirst'
+  | 'Expectimax'
+  | 'ExpectimaxNnue'
+  | 'MctsOnnx'
+  | 'MctsDL';
+
+/** 槽位种类："Human"（用户本人操作）、任意策略，或绑定 Agent 实体。 */
+export type SlotKind = 'Human' | 'Agent' | StrategyKind;
+
+/** 需要绑定模型的策略（模型类策略）。 */
+export function strategyNeedsModel(kind: StrategyKind): boolean {
+  return kind === 'ExpectimaxNnue' || kind === 'MctsOnnx' || kind === 'MctsDL';
+}
+
+/** 单个选手槽位视图（对齐 banqi-server `SlotView`）。 */
+export interface SlotView {
+  kind: SlotKind;
+  /** Agent 槽位绑定的 Agent ID（其余为 undefined；实际策略由 Agent 实时持有） */
+  agent_id?: string;
+  /** 模型类策略绑定的模型文件 */
+  model_file?: string;
+  mcts_sims?: number;
   engine_budget?: number;
   budget_mode?: string;
   nnue_depth?: number;
   nnue_budget?: number;
   nnue_time_ms?: number;
   search_timeout_ms?: number;
+}
+
+/** 红/黑双方槽位视图（对齐 banqi-server `SlotsView`）。 */
+export interface SlotsView {
+  red: SlotView;
+  black: SlotView;
+}
+
+/** 槽位配置请求（建局 / 对局中 PUT /slots 共用）。 */
+export interface SlotCfg {
+  kind: SlotKind;
+  /** 模型类策略绑定的模型文件（缺省按变体自动匹配） */
+  model_file?: string;
+  /** kind = 'Agent' 时必填：绑定 Agent 实体（其策略/搜索配置实时生效） */
+  agent_id?: string;
+}
+
+/** Agent（玩家实体）视图：创建后只读，仅搜索参数可实时调整。 */
+export interface AgentView {
+  id: string;
+  /** 适用的棋盘变体 ID（参与对局时须一致） */
+  variant: string;
+  kind: SlotKind;
+  model_file?: string;
+  mcts_sims?: number;
+  engine_budget?: number;
+  budget_mode?: string;
+  nnue_depth?: number;
+  nnue_budget?: number;
+  nnue_time_ms?: number;
+  search_timeout_ms?: number;
+}
+
+/** 创建 Agent 请求。 */
+export interface CreateAgentCfg {
+  variant: string;
+  kind: SlotKind;
+  model_file?: string;
+  params?: AgentParamsCfg;
+}
+
+/** Agent 搜索参数（全字段可选，缺省取服务器当前默认值；实时调整用同一形状）。 */
+export interface AgentParamsCfg {
+  mcts_sims?: number;
+  engine_budget?: number;
+  nnue_budget_mode?: NnueBudgetMode;
+  nnue_depth?: number;
+  nnue_budget?: number;
+  nnue_time_ms?: number;
+  search_timeout_ms?: number;
+}
+
+/** 双方槽位配置（red / black 均必填，Human 用 { kind: 'Human' }）。 */
+export interface SlotsCfg {
+  red: SlotCfg;
+  black: SlotCfg;
+}
+
+/** POST /games/:id/dry-run 响应：当前行棋方策略的建议走法（不落子）。 */
+export interface Suggestion {
+  /** 建议产生时的对局版本号（前端据此丢弃过期建议） */
+  version: number;
+  player: string;
+  action: number;
+  /** 源格（翻棋时 == to） */
+  from: number;
+  to: number;
+  is_chance: boolean;
+  is_flip: boolean;
+  is_capture: boolean;
+  /** 根评估值（行棋方视角；不可用时缺省） */
+  score?: number;
+  mcts_stats?: MctsSearchStats;
+  nnue_stats?: NnueSearchStats;
 }
 
 /** 一手棋的决策记录（棋谱项）。棋子字段为前端短码格式（"R_Sol" / "B_Gen" …）。 */
@@ -82,9 +180,9 @@ export interface StepResult {
   terminated: boolean;
   truncated: boolean;
   winner: number;
-  /** MCTS 对手时携带本次搜索统计，其他对手为 undefined */
+  /** MCTS 类策略携带本次搜索统计 */
   mcts_stats?: MctsSearchStats;
-  /** NNUE 对手（REST 后端）时携带本次搜索统计，其他对手为 undefined */
+  /** ExpectimaxNnue 策略携带本次搜索统计 */
   nnue_stats?: NnueSearchStats;
 }
 
@@ -135,16 +233,6 @@ export interface EngineSettings {
   /** 搜索硬超时毫秒（全模式必选生效） */
   searchTimeoutMs?: number;
 }
-
-export type Opponent =
-  | 'PvP'
-  | 'Random'
-  | 'RevealFirst'
-  | 'CaptureFirst'
-  | 'Engine'
-  | 'MctsDL'
-  | 'MctsOnnx'
-  | 'Nnue';
 
 export type Variant = string; // 后端 list_variants 下发，不再前端枚举
 

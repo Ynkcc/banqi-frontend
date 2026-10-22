@@ -3,10 +3,16 @@
 //
 // 契约真源：`types.ts`（与 banqi-server DTO 逐字段对齐，snake_case 直传，
 // 无适配层）。契约与路线图见 docs/backend-api.md。
+//
+// 选手槽位协议：红/黑各自独立配置为 Human 或任意策略（对局与玩家/策略解耦）；
+// run 单步 / dry-run 建议 / auto 由前端循环调用 run 实现。
 // ============================================================================
 
 import type {
+  AgentParamsCfg,
+  AgentView,
   Capabilities,
+  CreateAgentCfg,
   EngineSettings,
   ExEdge,
   ExNodeBoard,
@@ -19,8 +25,11 @@ import type {
   MctsRootInfo,
   ModelList,
   NnueBudgetMode,
-  Opponent,
+  SlotCfg,
+  SlotsCfg,
+  SlotsView,
   StepResult,
+  Suggestion,
   Variant,
   VariantInfo,
 } from './types';
@@ -32,11 +41,6 @@ export interface NnueSettingsInput {
   budget?: number;
   timeMs?: number;
   timeoutMs?: number;
-}
-
-/** GET /api/games/:id/opponent 响应。 */
-interface OpponentResp {
-  opponent: string;
 }
 
 /** GET /api/games/:id/move-action 响应。 */
@@ -80,51 +84,56 @@ function requireGameId(): string {
   return currentGameId;
 }
 
-/** 最近一次状态中的对手种类（loadFen 沿用当前对手设置）。 */
-let lastOpponentKind: Opponent | null = null;
+/** 最近一次建局使用的槽位配置（loadFen 沿用当前槽位设置）。 */
+let lastSlots: SlotsCfg = { red: { kind: 'Human' }, black: { kind: 'Human' } };
 
-function recordOpponentFromState(state: { ai?: { kind?: string } }): void {
-  const kind = state.ai?.kind;
-  if (typeof kind === 'string' && kind.length > 0) lastOpponentKind = kind as Opponent;
+/** 由状态响应记录当前槽位配置（粘贴重建等场景沿用）。 */
+function recordSlotsFromState(state: { slots?: SlotsView }): void {
+  if (!state.slots) return;
+  lastSlots = {
+    red: { kind: state.slots.red.kind, model_file: state.slots.red.model_file },
+    black: { kind: state.slots.black.kind, model_file: state.slots.black.model_file },
+  };
+}
+
+/** 槽位配置 → 请求体片段（Human 只带 kind；模型类策略附模型文件；
+ *  Agent 槽位附 agentId）。
+ *  请求 DTO 为 camelCase（与 CreateGameReq 一致）；状态响应为 snake_case。 */
+function slotBody(cfg: SlotCfg): Record<string, unknown> {
+  const body: Record<string, unknown> = { kind: cfg.kind };
+  if (cfg.agent_id) body.agentId = cfg.agent_id;
+  if (cfg.model_file && cfg.kind !== 'Human' && cfg.kind !== 'Agent') {
+    body.modelFile = cfg.model_file;
+  }
+  return body;
 }
 
 /** 统一 API（HTTP REST）。 */
 export const api = {
-  async resetGame(opponent: Opponent, variant: Variant, modelFile?: string): Promise<GameState> {
-    const isModelKind = opponent === 'MctsOnnx' || opponent === 'Nnue' || opponent === 'MctsDL';
+  async resetGame(slots: SlotsCfg, variant: Variant, fen?: string): Promise<GameState> {
     const created = await http<{ game_id: string; state: GameState }>('/api/games', {
       method: 'POST',
       body: JSON.stringify({
-        variant,
-        opponent,
-        // 模型类对手：用户选择的模型与对局绑定（.onnx → MCTS+ONNX，.nnue →
-        // Expectimax+NNUE，.pt → MCTS+TorchScript）；缺省时服务端按变体 ID
-        // 自动匹配唯一候选（多候选时报歧义错误，要求显式选择）。
-        // 规则 / Engine 对手无模型，忽略 modelFile。
-        ...(isModelKind && modelFile ? { modelFile } : {}),
+        // 变体缺省（BFEN 重建时以 BFEN 自带标识为准）
+        ...(variant ? { variant } : {}),
+        // 红/黑槽位独立配置：双方 Human 即原本地双人；模型类策略绑定的模型
+        // 随槽位下发（缺省时服务端按变体 ID 自动匹配唯一候选）
+        slots: {
+          red: slotBody(slots.red),
+          black: slotBody(slots.black),
+        },
+        ...(fen ? { fen } : {}),
       }),
     });
     currentGameId = created.game_id;
-    recordOpponentFromState(created.state);
+    lastSlots = slots;
+    recordSlotsFromState(created.state);
     return created.state;
   },
-  async loadFen(fen: string, modelFile?: string): Promise<GameState> {
+  async loadFen(fen: string): Promise<GameState> {
     // 由 BFEN 局面串重建对局：变体以 BFEN 自带标识为准；走子历史从空开始。
-    // 对手类型沿用当前设置；模型类对手沿用绑定模型（缺省时服务端按变体 ID 自动匹配）。
-    const opponent =
-      lastOpponentKind && lastOpponentKind !== 'PvP' ? lastOpponentKind : undefined;
-    const isModelKind = opponent === 'MctsOnnx' || opponent === 'Nnue' || opponent === 'MctsDL';
-    const created = await http<{ game_id: string; state: GameState }>('/api/games', {
-      method: 'POST',
-      body: JSON.stringify({
-        fen,
-        ...(opponent ? { opponent } : { aiEnabled: true }),
-        ...(modelFile && (isModelKind || !opponent) ? { modelFile } : {}),
-      }),
-    });
-    currentGameId = created.game_id;
-    recordOpponentFromState(created.state);
-    return created.state;
+    // 槽位配置沿用当前设置（模型类策略沿用绑定模型，缺省时服务端自动匹配）。
+    return api.resetGame(lastSlots, '', fen);
   },
   async stepGame(action: number): Promise<StepResult> {
     const id = requireGameId();
@@ -132,39 +141,72 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ action }),
     });
-    recordOpponentFromState(resp.state);
+    recordSlotsFromState(resp.state);
     return resp;
   },
-  async botMove(): Promise<StepResult> {
+  /**
+   * 单步推进：当前行棋方按其槽位策略执行一步（Human 方返回 409 HUMAN_TURN）。
+   * `agentId` 指定 Agent 时以其当前配置为当前行棋方执行一步——
+   * 单步永远作用于当前行动方，与该 Agent 托管哪方无关。
+   */
+  async runStep(agentId?: string): Promise<StepResult> {
     const id = requireGameId();
-    const resp = await http<StepResult>(`/api/games/${id}/ai-move`, { method: 'POST' });
-    recordOpponentFromState(resp.state);
+    const resp = await http<StepResult>(`/api/games/${id}/run`, {
+      method: 'POST',
+      body: JSON.stringify(agentId ? { agentId } : {}),
+    });
+    recordSlotsFromState(resp.state);
     return resp;
+  },
+  /**
+   * dry-run：当前行棋方策略建议走法（不落子）。
+   * `agentId` 指定 Agent 时以其当前配置为当前行棋方计算建议——
+   * 建议永远作用于当前行动方，与该 Agent 托管哪方无关。
+   * 未指定且当前方为 Human 时可用 kind/modelFile 指定提示策略。
+   */
+  async dryRun(kind?: string, modelFile?: string, agentId?: string): Promise<Suggestion> {
+    const id = requireGameId();
+    return http<Suggestion>(`/api/games/${id}/dry-run`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ...(kind ? { kind } : {}),
+        ...(modelFile ? { modelFile } : {}),
+        ...(agentId ? { agentId } : {}),
+      }),
+    });
+  },
+  /** 对局中切换任一方槽位（只更新给出的方；模型类策略一并指定模型）。 */
+  async setSlots(partial: { red?: SlotCfg; black?: SlotCfg }): Promise<GameState> {
+    const id = requireGameId();
+    const body: Record<string, unknown> = {};
+    if (partial.red) body.red = slotBody(partial.red);
+    if (partial.black) body.black = slotBody(partial.black);
+    const state = await http<GameState>(`/api/games/${id}/slots`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+    recordSlotsFromState(state);
+    return state;
   },
   async undoGame(): Promise<StepResult> {
-    // server 缺省语义即「回退到当前行棋方上次行动前」（AI 对局中自动含 AI 回合）
+    // server 缺省语义即「回退到当前行棋方上次行动前」（策略托管回合自动一并回退）
     const id = requireGameId();
     const resp = await http<StepResult>(`/api/games/${id}/undo`, {
       method: 'POST',
       body: JSON.stringify({}),
     });
-    recordOpponentFromState(resp.state);
+    recordSlotsFromState(resp.state);
     return resp;
   },
   async getGameState(): Promise<GameState> {
     const id = requireGameId();
     const state = await http<GameState>(`/api/games/${id}`);
-    recordOpponentFromState(state);
+    recordSlotsFromState(state);
     return state;
   },
   async listVariants(): Promise<VariantInfo[]> {
     const resp = await http<{ variants: VariantInfo[] }>('/api/variants');
     return resp.variants;
-  },
-  async getOpponentType(): Promise<Opponent> {
-    if (!currentGameId) return 'PvP';
-    const resp = await http<OpponentResp>(`/api/games/${currentGameId}/opponent`);
-    return resp.opponent as Opponent;
   },
   async getMoveAction(fromSq: number, toSq: number): Promise<number | null> {
     if (!currentGameId) return null;
@@ -176,23 +218,8 @@ export const api = {
   async listModels(): Promise<ModelList> {
     return http<ModelList>('/api/models');
   },
-  async openModelsDir(): Promise<void> {
-    // HTTP 后端运行在服务器上，无法打开浏览器侧本地目录（UI 据此隐藏入口）
-    throw new RestError('HTTP 后端不支持打开本地目录');
-  },
   async getCapabilities(): Promise<Capabilities> {
     return http<Capabilities>('/api/capabilities');
-  },
-  async loadModel(path: string): Promise<string> {
-    // 模型加载与对局绑定：绑定到当前对局（服务端随用随加载并常驻缓存）
-    if (!currentGameId) {
-      return `已选择模型 ${path}（开始新对局时自动绑定）`;
-    }
-    await http(`/api/games/${currentGameId}/model`, {
-      method: 'PUT',
-      body: JSON.stringify({ modelFile: path }),
-    });
-    return `模型已绑定到当前对局: ${path}`;
   },
   async setMctsIterations(iters: number): Promise<number> {
     const resp = await http<EngineSettings>('/api/settings', {
@@ -210,8 +237,8 @@ export const api = {
     return resp.engineBudget;
   },
   async setNnueSettings(p: NnueSettingsInput): Promise<EngineSettings> {
-    // PUT /api/settings 部分更新：NNUE 预算模式 / 深度 / 节点预算 / 时间预算 /
-    // 搜索硬超时（未给出的字段保持服务器当前值），返回钳制后的全量生效快照
+    // PUT /api/settings 部分更新：Expectimax 预算模式 / 深度 / 节点预算 /
+    // 时间预算 / 搜索硬超时（未给出的字段保持服务器当前值），返回钳制后的全量生效快照
     return http<EngineSettings>('/api/settings', {
       method: 'PUT',
       body: JSON.stringify({
@@ -253,4 +280,47 @@ export const api = {
   async nnueSearch(): Promise<ExRootInfo> {
     return http<ExRootInfo>(`/api/games/${requireGameId()}/nnue/search`, { method: 'POST' });
   },
+
+  // ==========================================================================
+  // Agent（玩家实体）：创建后只读，仅搜索参数可实时调整
+  // ==========================================================================
+
+  async createAgent(cfg: CreateAgentCfg): Promise<AgentView> {
+    return http<AgentView>('/api/agents', {
+      method: 'POST',
+      body: JSON.stringify({
+        variant: cfg.variant,
+        kind: cfg.kind,
+        ...(cfg.model_file ? { modelFile: cfg.model_file } : {}),
+        ...(cfg.params ? { params: paramsBody(cfg.params) } : {}),
+      }),
+    });
+  },
+  async listAgents(): Promise<AgentView[]> {
+    const resp = await http<{ agents: AgentView[] }>('/api/agents');
+    return resp.agents;
+  },
+  async deleteAgent(id: string): Promise<void> {
+    await http<void>(`/api/agents/${id}`, { method: 'DELETE' });
+  },
+  /** 实时调整 Agent 搜索参数（部分更新，对所有绑定它的对局立即生效）。 */
+  async updateAgentSettings(id: string, params: AgentParamsCfg): Promise<AgentView> {
+    return http<AgentView>(`/api/agents/${id}/settings`, {
+      method: 'PUT',
+      body: JSON.stringify(paramsBody(params)),
+    });
+  },
 };
+
+/** 搜索参数 → 请求体（camelCase；仅附带显式给出的字段）。 */
+function paramsBody(p: AgentParamsCfg): Record<string, unknown> {
+  return {
+    ...(p.mcts_sims !== undefined ? { mctsSims: p.mcts_sims } : {}),
+    ...(p.engine_budget !== undefined ? { engineBudget: p.engine_budget } : {}),
+    ...(p.nnue_budget_mode ? { nnueBudgetMode: p.nnue_budget_mode } : {}),
+    ...(p.nnue_depth !== undefined ? { nnueDepth: p.nnue_depth } : {}),
+    ...(p.nnue_budget !== undefined ? { nnueBudget: p.nnue_budget } : {}),
+    ...(p.nnue_time_ms !== undefined ? { nnueTimeMs: p.nnue_time_ms } : {}),
+    ...(p.search_timeout_ms !== undefined ? { searchTimeoutMs: p.search_timeout_ms } : {}),
+  };
+}

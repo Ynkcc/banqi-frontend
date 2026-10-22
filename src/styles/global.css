@@ -365,6 +365,17 @@ button.mini {
   box-shadow: 0 0 6px rgba(247, 192, 107, 0.25);
   background: rgba(247, 192, 107, 0.12);
 }
+/* dry-run 建议走法高亮（策略建议 / 人类提示，不落子） */
+.chess-cell.suggest-cell::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: inherit;
+  border: 2px dashed rgba(33, 150, 243, 0.85);
+  box-shadow: 0 0 10px rgba(33, 150, 243, 0.35);
+  background: rgba(33, 150, 243, 0.14);
+  pointer-events: none;
+}
 
 .board-empty {
   padding: 80px;

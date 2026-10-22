@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useGame } from './composables/useGame';
 import { useSettings } from './composables/useSettings';
+import AgentsPanel from './components/AgentsPanel.vue';
 import BoardView from './components/BoardView.vue';
 import BitboardPanel from './components/BitboardPanel.vue';
 import ControlPanel from './components/ControlPanel.vue';
@@ -64,6 +65,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
     <main class="app-main">
       <aside class="left-column">
         <ControlPanel />
+        <AgentsPanel />
       </aside>
 
       <section class="center-column">
