@@ -8,6 +8,7 @@ import ControlPanel from './components/ControlPanel.vue';
 import HistoryPanel from './components/HistoryPanel.vue';
 import LogPanel from './components/LogPanel.vue';
 import MctsTreePanel from './components/MctsTreePanel.vue';
+import ExpectimaxTreePanel from './components/ExpectimaxTreePanel.vue';
 import PieceTray from './components/PieceTray.vue';
 import StatusPanel from './components/StatusPanel.vue';
 import ToastHost from './components/ToastHost.vue';
@@ -15,7 +16,7 @@ import ToastHost from './components/ToastHost.vue';
 const { store, loadInitialState, deselect } = useGame();
 const { loadCapabilities, refreshModels } = useSettings();
 
-const activeDrawer = ref<'none' | 'bitboard' | 'mcts'>('none');
+const activeDrawer = ref<'none' | 'bitboard' | 'mcts' | 'expectimax'>('none');
 const overlayVisible = computed(() => activeDrawer.value !== 'none');
 
 function closeDrawer() {
@@ -50,6 +51,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
         </button>
         <button class="pill" @click="activeDrawer = activeDrawer === 'mcts' ? 'none' : 'mcts'">
           搜索树
+        </button>
+        <button
+          class="pill"
+          @click="activeDrawer = activeDrawer === 'expectimax' ? 'none' : 'expectimax'"
+        >
+          Expectimax
         </button>
       </div>
     </header>
@@ -105,6 +112,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
       </Transition>
       <Transition name="drawer">
         <MctsTreePanel v-if="activeDrawer === 'mcts'" @close="closeDrawer" />
+      </Transition>
+      <Transition name="drawer">
+        <ExpectimaxTreePanel v-if="activeDrawer === 'expectimax'" @close="closeDrawer" />
       </Transition>
     </Teleport>
 

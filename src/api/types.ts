@@ -228,3 +228,68 @@ export interface MctsNodeDetail {
   child_count: number;
   outcome_count: number;
 }
+
+// ============================================================================
+// Expectimax 搜索轨迹树（Alpha-Beta 搜索轨迹，非完整博弈树）
+// ============================================================================
+
+/** 值界类型：exact = 精确值，lower/upper = fail-high/low 界，unknown = 未完成节点。 */
+export type ExFlag = 'exact' | 'lower' | 'upper' | 'unknown';
+
+/** 截断 / 剪枝标记：tt = TT 命中截断（子树未展开），razor = razoring，nmp = null-move。 */
+export type ExMark = 'tt' | 'razor' | 'nmp';
+
+/** 父节点到子节点的搜索轨迹边。`value` 已换算到父节点视角（= -child.value）。 */
+export interface ExEdge {
+  child_id: number;
+  action: number;
+  value: number;
+  is_chance: boolean;
+  chance_prob: number;
+  is_outcome: boolean;
+  depth: number;
+  flag: ExFlag;
+  mark: ExMark | null;
+  child_count: number;
+}
+
+export interface ExNodeSummary {
+  id: number;
+  action: number;
+  /** 自身走子方视角值（[-1,1]） */
+  value: number;
+  alpha: number;
+  beta: number;
+  depth: number;
+  flag: ExFlag;
+  mark: ExMark | null;
+  is_chance: boolean;
+  is_outcome: boolean;
+  chance_prob: number;
+  is_root: boolean;
+  is_null_probe: boolean;
+  player: string;
+  child_count: number;
+}
+
+export interface ExSearchStats {
+  mode: string;
+  depth: number;
+  budget: number;
+  time_limit_ms: number;
+  nodes: number;
+  reached_depth: number;
+  elapsed_ms: number;
+}
+
+export interface ExRootInfo {
+  root: ExNodeSummary;
+  chosen_action: number;
+  stats: ExSearchStats;
+}
+
+/** GET /api/games/:id/nnue/node/:node/board 返回：节点局面 + 到达着法所在格。 */
+export interface ExNodeBoard {
+  state: GameState;
+  move_coords: number[];
+}

@@ -8,6 +8,10 @@
 import type {
   Capabilities,
   EngineSettings,
+  ExEdge,
+  ExNodeBoard,
+  ExNodeSummary,
+  ExRootInfo,
   GameState,
   MctsEdge,
   MctsNodeBoard,
@@ -233,5 +237,20 @@ export const api = {
   },
   async mctsSearch(): Promise<MctsRootInfo> {
     return http<MctsRootInfo>(`/api/games/${requireGameId()}/mcts/search`, { method: 'POST' });
+  },
+  async nnueGetRoot(): Promise<ExRootInfo> {
+    return http<ExRootInfo>(`/api/games/${requireGameId()}/nnue/root`);
+  },
+  async nnueGetChildren(nodeId: number): Promise<ExEdge[]> {
+    return http<ExEdge[]>(`/api/games/${requireGameId()}/nnue/node/${nodeId}/children`);
+  },
+  async nnueGetNodeDetail(nodeId: number): Promise<ExNodeSummary> {
+    return http<ExNodeSummary>(`/api/games/${requireGameId()}/nnue/node/${nodeId}`);
+  },
+  async nnueGetNodeBoard(nodeId: number): Promise<ExNodeBoard> {
+    return http<ExNodeBoard>(`/api/games/${requireGameId()}/nnue/node/${nodeId}/board`);
+  },
+  async nnueSearch(): Promise<ExRootInfo> {
+    return http<ExRootInfo>(`/api/games/${requireGameId()}/nnue/search`, { method: 'POST' });
   },
 };
