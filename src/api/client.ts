@@ -25,6 +25,8 @@ import type {
   MctsRootInfo,
   ModelList,
   NnueBudgetMode,
+  OpeningScenarioCfg,
+  ScenariosResp,
   SlotCfg,
   SlotsCfg,
   SlotsView,
@@ -32,6 +34,7 @@ import type {
   Suggestion,
   Variant,
   VariantInfo,
+  VariantScenarios,
 } from './types';
 
 /** NNUE 预算设置输入（setNnueSettings 统一入参；未给出的字段保持服务器当前值）。 */
@@ -110,7 +113,12 @@ function slotBody(cfg: SlotCfg): Record<string, unknown> {
 
 /** 统一 API（HTTP REST）。 */
 export const api = {
-  async resetGame(slots: SlotsCfg, variant: Variant, fen?: string): Promise<GameState> {
+  async resetGame(
+    slots: SlotsCfg,
+    variant: Variant,
+    fen?: string,
+    scenario?: OpeningScenarioCfg,
+  ): Promise<GameState> {
     const created = await http<{ game_id: string; state: GameState }>('/api/games', {
       method: 'POST',
       body: JSON.stringify({
@@ -122,7 +130,8 @@ export const api = {
           red: slotBody(slots.red),
           black: slotBody(slots.black),
         },
-        ...(fen ? { fen } : {}),
+        // BFEN 与开局场景互斥（BFEN 已携带完整局面）
+        ...(fen ? { fen } : scenario ? { scenario } : {}),
       }),
     });
     currentGameId = created.game_id;
@@ -206,6 +215,11 @@ export const api = {
   },
   async listVariants(): Promise<VariantInfo[]> {
     const resp = await http<{ variants: VariantInfo[] }>('/api/variants');
+    return resp.variants;
+  },
+  /** GET /api/scenarios：变体 → 支持的开局场景矩阵（建局面板渲染选择项）。 */
+  async listScenarios(): Promise<VariantScenarios[]> {
+    const resp = await http<ScenariosResp>('/api/scenarios');
     return resp.variants;
   },
   async getMoveAction(fromSq: number, toSq: number): Promise<number | null> {

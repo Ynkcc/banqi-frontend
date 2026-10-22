@@ -1,6 +1,6 @@
 import { computed, reactive, watch } from 'vue';
 import { api } from '../api/client';
-import type { GameState, HistoryMove, Slot, SlotCfg, SlotsCfg, SlotKind, Suggestion, Variant } from '../api/types';
+import type { GameState, HistoryMove, OpeningScenarioCfg, Slot, SlotCfg, SlotsCfg, SlotKind, Suggestion, Variant } from '../api/types';
 import { variantMaxConsecutive } from '../domain/variants';
 import { appendLog } from './useLogs';
 import { useToast } from './useToast';
@@ -416,7 +416,7 @@ async function applySlots(partial: { red?: SlotCfg; black?: SlotCfg }) {
   }
 }
 
-async function resetGame(slots: SlotsCfg, variant: Variant) {
+async function resetGame(slots: SlotsCfg, variant: Variant, scenario?: OpeningScenarioCfg) {
   if (store.busy) return;
   store.selectedSquare = null;
   store.moveHighlights = new Map();
@@ -427,9 +427,10 @@ async function resetGame(slots: SlotsCfg, variant: Variant) {
       `开始新游戏（变体 ${variant}，红方 ${slotKindLabel(slots.red.kind)}` +
         `，黑方 ${slotKindLabel(slots.black.kind)}` +
         `${slots.red.model_file ? `，红方模型 ${slots.red.model_file}` : ''}` +
-        `${slots.black.model_file ? `，黑方模型 ${slots.black.model_file}` : ''}）`,
+        `${slots.black.model_file ? `，黑方模型 ${slots.black.model_file}` : ''}` +
+        `${scenario ? `，开局场景 ${scenario.kind}` : ''}）`,
     );
-    store.state = await api.resetGame(slots, variant);
+    store.state = await api.resetGame(slots, variant, undefined, scenario);
     store.lastResult = null;
     store.canUndo = !!store.state.can_undo;
     // 策略回合 / 自动对弈由状态侦听器统一反应（见下方 watch）

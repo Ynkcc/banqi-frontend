@@ -381,3 +381,52 @@ export interface ExNodeBoard {
   state: GameState;
   move_coords: number[];
 }
+
+// ============================================================================
+// 开局场景（可选建局参数；前端不感知具体场景——名称 / 说明 / 参数 schema
+// 全部由 GET /api/scenarios 下发，按 schema 动态渲染与组装请求体）
+// ============================================================================
+
+/** 场景参数描述（对齐后端 `ScenarioParamInfo`；渲染顺序即数组顺序）。 */
+export interface ScenarioParamInfo {
+  /** 参数名（即场景请求体中的字段名，直传后端） */
+  name: string;
+  /** 面向用户的参数名与语义说明（如「黑将格位（留空 = 可达处随机）」） */
+  label: string;
+  /** 是否必填 */
+  required: boolean;
+  /** 缺省值（null = 无缺省；可选参数留空的语义见 label） */
+  default_value: number | null;
+}
+
+/** 场景元信息（对齐后端 `ScenarioInfo`；id 与请求体 `"kind"` 标签一致）。 */
+export interface ScenarioInfo {
+  id: string;
+  label: string;
+  /** 场景语义说明（建局面板 hint 文案） */
+  description: string;
+  params: ScenarioParamInfo[];
+}
+
+/**
+ * 开局场景请求体（POST /api/games 的 `scenario` 字段）。
+ *
+ * 形态：`{ kind: <场景标识>, <参数名>: <格位/数量>, ... }`，键集合由所选
+ * 场景的 params schema 决定（必填项必须给出；可选项留空即省略）。
+ * 场景语义对本模块透明，仅透传。
+ */
+export interface OpeningScenarioCfg {
+  kind: string;
+  [param: string]: number | string | undefined;
+}
+
+/** 单个变体支持的开局场景（对齐后端 `VariantScenarios`）。 */
+export interface VariantScenarios {
+  variant: string;
+  scenarios: ScenarioInfo[];
+}
+
+/** GET /api/scenarios 响应。 */
+export interface ScenariosResp {
+  variants: VariantScenarios[];
+}
