@@ -2,7 +2,7 @@
 import { computed, onMounted } from 'vue';
 import { useRecentGames } from '../composables/useRecentGames';
 import { pieceText, variantDims } from '../domain/pieces';
-import type { ReplayStep } from '../api/types';
+import type { HiddenBag, ReplayStep } from '../api/types';
 
 defineEmits<{ close: [] }>();
 
@@ -27,7 +27,10 @@ interface BoardState {
   board: string[];
   shown: boolean[];
   scores: [number, number];
+  /** 盘上暗子格数 */
   hidden: number;
+  /** 双方剩余暗子按类型计数（服务端剩余池口径，恒可用） */
+  bag: HiddenBag;
 }
 
 const boardState = computed<BoardState | null>(() => {
@@ -39,20 +42,19 @@ const boardState = computed<BoardState | null>(() => {
       board: r.final_board,
       shown: r.final_shown,
       scores: r.final_scores,
-      hidden: countHidden(r.final_board, r.final_shown),
+      hidden: r.final_shown.filter((s) => !s).length,
+      bag: r.final_hidden_bag,
     };
   }
   const m = r.moves[k];
-  return { board: m.board, shown: m.revealed_at, scores: m.scores, hidden: countHidden(m.board, m.revealed_at) };
+  return {
+    board: m.board,
+    shown: m.revealed_at,
+    scores: m.scores,
+    hidden: m.revealed_at.filter((s) => !s).length,
+    bag: m.hidden_bag,
+  };
 });
-
-function countHidden(board: string[], shown: boolean[]): number {
-  let n = 0;
-  for (let i = 0; i < board.length; i++) {
-    if (!shown[i] && board[i] !== 'Hidden') n++;
-  }
-  return n;
-}
 
 /** 产出当前态的那手棋（态 0 = 无）。 */
 const currentMove = computed<ReplayStep | null>(() => {
@@ -76,23 +78,15 @@ const TERMINATION_LABELS: Record<string, string> = {
 
 const BAG_TYPES = ['Sol', 'Can', 'Hor', 'Cha', 'Ele', 'Adv', 'Gen'] as const;
 
-/** 当前局面双方剩余暗子按类型计数（上帝视角，从棋盘 + 明暗标记派生）。 */
+/** 当前局面双方剩余暗子按类型计数（BAG_TYPES 下标与后端 PieceType 枚举序一致）。 */
 const hiddenBag = computed(() => {
-  const st = boardState.value;
+  const bag = boardState.value?.bag;
   const red: Record<string, number> = {};
   const black: Record<string, number> = {};
-  for (const t of BAG_TYPES) {
-    red[t] = 0;
-    black[t] = 0;
-  }
-  if (st) {
-    for (let i = 0; i < st.board.length; i++) {
-      if (st.shown[i]) continue;
-      const v = st.board[i];
-      if (v.startsWith('R_')) red[v.substring(2)]++;
-      else if (v.startsWith('B_')) black[v.substring(2)]++;
-    }
-  }
+  BAG_TYPES.forEach((t, i) => {
+    red[t] = bag?.red[i] ?? 0;
+    black[t] = bag?.black[i] ?? 0;
+  });
   return { red, black };
 });
 

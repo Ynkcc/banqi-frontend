@@ -553,6 +553,8 @@ export interface ReplayResp {
   final_shown: boolean[];
   /** 终局双方剩余子力分 [red, black] */
   final_scores: [number, number];
+  /** 终局双方剩余暗子按类型计数（剩余池口径，恒可用） */
+  final_hidden_bag: HiddenBag;
   /** "snapshot" | "replay" */
   board_source: string;
   moves: ReplayStep[];
