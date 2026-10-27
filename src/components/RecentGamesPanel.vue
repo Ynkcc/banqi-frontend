@@ -1,76 +1,115 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
 import { useRecentGames } from '../composables/useRecentGames';
-import { useGame } from '../composables/useGame';
-import { pieceText } from '../domain/pieces';
-import type { HistoryMove, Slot } from '../api/types';
+import { pieceText, variantDims } from '../domain/pieces';
+import type { ReplayStep } from '../api/types';
 
 defineEmits<{ close: [] }>();
 
 const { store, refresh, openGame, closeGame, stepPly, gotoPly, replayAsNew } = useRecentGames();
-const { slotKindLabel } = useGame();
 
 onMounted(refresh);
 
 // ---------------------------------------------------------------------------
-// 推演视图：逐 ply 局面预览
-//
-// 推演端点只下发 BFEN 文本（不重建 GameState），前端解析 BFEN 的 placement
-// 字段还原盘面（'*' = 暗子、字母 = 明子、数字 = 连续空位），用迷你棋盘预览。
-// 字母 → 短码映射与 banqi-core fen.rs 的 PIECE_LETTERS 对齐。
+// 上帝视角回放：服务端已重建逐步棋盘（board/revealed_at/hidden_bag/诊断），
+// 前端只负责渲染与步进。局面态 0 = 初始局面，N = 终局；态 k 的盘面 = moves[k]
+// 的步前棋盘（k < N）或 final_board（k = N）。
 // ---------------------------------------------------------------------------
 
-const LETTER_TO_TYPE: Record<string, string> = {
-  P: 'Sol',
-  C: 'Can',
-  N: 'Hor',
-  R: 'Cha',
-  B: 'Ele',
-  A: 'Adv',
-  K: 'Gen',
-};
+const stateCount = computed(() => (store.replay?.moves.length ?? 0) + 1);
 
-function parsePlacement(fen: string): { rows: number; cols: number; cells: Slot[] } {
-  const placement = fen.split(' ')[1] ?? '';
-  const rowFields = placement.split('/');
-  const cells: Slot[] = [];
-  for (const row of rowFields) {
-    for (const ch of row) {
-      if (ch === '*') {
-        cells.push('Hidden');
-      } else if (ch >= '1' && ch <= '9') {
-        for (let i = 0; i < Number(ch); i++) cells.push('Empty');
-      } else {
-        const type = LETTER_TO_TYPE[ch.toUpperCase()];
-        cells.push(type ? `${ch === ch.toUpperCase() ? 'R_' : 'B_'}${type}` : 'Hidden');
-      }
-    }
-  }
-  const rows = rowFields.length;
-  return { rows, cols: rows ? cells.length / rows : 0, cells };
-}
-
-const currentPly = computed(() => store.replay?.plies[store.plyIndex] ?? null);
-
-const miniBoard = computed(() => {
-  const fen = currentPly.value?.fen;
-  return fen ? parsePlacement(fen) : null;
+const dims = computed(() => {
+  const len = store.replay?.initial_board.length ?? 0;
+  return variantDims(store.replay?.variant ?? '', len);
 });
 
-/** 一手棋的紧凑描述（与决策历史面板同口径）。 */
-function describe(m: HistoryMove): string {
-  if (m.is_flip) return `翻开 → ${pieceText(m.revealed ?? '') || '?'}`;
-  if (m.is_capture && m.is_chance) return `打暗子 → ${pieceText(m.revealed ?? '') || '?'} 被消灭`;
-  if (m.is_capture) return `吃掉 ${pieceText(m.captured ?? '')}`;
-  return '移动';
+interface BoardState {
+  board: string[];
+  shown: boolean[];
+  scores: [number, number];
+  hidden: number;
 }
 
-/** ply 行描述（ply 0 = 初始局面；其余取归档的逐子记录）。 */
-function plyDesc(index: number): string {
-  if (index === 0) return '初始局面';
-  const m = store.detail?.moves[index - 1];
-  if (!m) return `动作 ${store.replay?.plies[index]?.last_action ?? '?'}`;
-  return `${m.player === 'Red' ? '红' : '黑'} ${describe(m)}`;
+const boardState = computed<BoardState | null>(() => {
+  const r = store.replay;
+  if (!r) return null;
+  const k = store.plyIndex;
+  if (k >= r.moves.length) {
+    return {
+      board: r.final_board,
+      shown: r.final_shown,
+      scores: r.final_scores,
+      hidden: countHidden(r.final_board, r.final_shown),
+    };
+  }
+  const m = r.moves[k];
+  return { board: m.board, shown: m.revealed_at, scores: m.scores, hidden: countHidden(m.board, m.revealed_at) };
+});
+
+function countHidden(board: string[], shown: boolean[]): number {
+  let n = 0;
+  for (let i = 0; i < board.length; i++) {
+    if (!shown[i] && board[i] !== 'Hidden') n++;
+  }
+  return n;
+}
+
+/** 产出当前态的那手棋（态 0 = 无）。 */
+const currentMove = computed<ReplayStep | null>(() => {
+  const k = store.plyIndex;
+  return k >= 1 ? (store.replay?.moves[k - 1] ?? null) : null;
+});
+
+const KIND_LABELS: Record<string, string> = {
+  flip: '翻棋',
+  move: '移动',
+  capture: '吃子',
+  'reveal-attack': '吃暗子',
+};
+
+const TERMINATION_LABELS: Record<string, string> = {
+  decisive: '分出胜负',
+  quiet_draw: '无吃子和棋',
+  max_steps: '步数上限和棋',
+  unspecified: '未终局',
+};
+
+const BAG_TYPES = ['Sol', 'Can', 'Hor', 'Cha', 'Ele', 'Adv', 'Gen'] as const;
+
+/** 当前局面双方剩余暗子按类型计数（上帝视角，从棋盘 + 明暗标记派生）。 */
+const hiddenBag = computed(() => {
+  const st = boardState.value;
+  const red: Record<string, number> = {};
+  const black: Record<string, number> = {};
+  for (const t of BAG_TYPES) {
+    red[t] = 0;
+    black[t] = 0;
+  }
+  if (st) {
+    for (let i = 0; i < st.board.length; i++) {
+      if (st.shown[i]) continue;
+      const v = st.board[i];
+      if (v.startsWith('R_')) red[v.substring(2)]++;
+      else if (v.startsWith('B_')) black[v.substring(2)]++;
+    }
+  }
+  return { red, black };
+});
+
+/** ply 列表行描述（与决策历史面板同口径）。 */
+function stepDesc(m: ReplayStep): string {
+  const side = m.player === 'Red' ? '红' : '黑';
+  if (m.kind === 'flip') return `${side} 翻开 → ${pieceText(m.revealed ?? '') || '?'}`;
+  if (m.kind === 'reveal-attack') return `${side} 打暗子 → ${pieceText(m.revealed ?? '') || '?'} 被消灭`;
+  if (m.kind === 'capture') return `${side} 吃掉 ${pieceText(m.captured ?? '')}`;
+  return `${side} 移动`;
+}
+
+function cellClass(value: string, shown: boolean): string {
+  if (value === 'Empty') return 'empty';
+  if (value === 'Hidden') return 'hidden';
+  const cls = value.startsWith('R_') ? 'red' : 'black';
+  return shown ? cls : `god-hidden ${cls}`;
 }
 
 function winnerLabel(winner?: string): string {
@@ -84,9 +123,13 @@ function fmtTime(unix: number): string {
 }
 
 function roleLabel(side: 'red' | 'black'): string {
-  const slot = store.detail?.slots[side];
-  if (!slot) return '—';
-  return slotKindLabel(slot.kind);
+  return side === 'red'
+    ? (store.replay?.side_red ?? store.detail?.slots.red.kind ?? '—')
+    : (store.replay?.side_black ?? store.detail?.slots.black.kind ?? '—');
+}
+
+function statRow(label: string, value?: number | string | boolean): string {
+  return value === undefined ? `${label} —` : `${label} ${value}`;
 }
 </script>
 
@@ -102,42 +145,47 @@ function roleLabel(side: 'red' | 'black'): string {
       </div>
     </header>
     <div class="sidebar-body">
-      <!-- ==================== 推演视图 ==================== -->
+      <!-- ==================== 上帝视角回放视图 ==================== -->
       <template v-if="store.detail && store.replay">
         <div class="replay-summary">
           <div class="recent-row-top">
-            <span class="recent-variant">{{ store.detail.variant }}</span>
-            <span class="recent-winner" :class="store.detail.winner">
-              {{ winnerLabel(store.detail.winner) }} · {{ store.detail.total_steps }} 步
+            <span class="recent-variant">{{ store.replay.variant }}</span>
+            <span class="recent-winner" :class="store.replay.winner">
+              {{ winnerLabel(store.replay.winner) }} · {{ store.replay.moves.length }} 步
             </span>
             <span class="recent-time">{{ fmtTime(store.detail.finished_at) }}</span>
           </div>
-          <div class="recent-roles">红 {{ roleLabel('red') }} vs 黑 {{ roleLabel('black') }}</div>
+          <div class="recent-roles">
+            红 {{ roleLabel('red') }} vs 黑 {{ roleLabel('black') }}
+            <span class="termination-badge">{{ TERMINATION_LABELS[store.replay.termination] ?? store.replay.termination }}</span>
+            <span v-if="store.replay.board_source === 'replay'" class="source-badge" title="快照缺失，由动作序列推断重建">动作推断</span>
+          </div>
         </div>
 
         <div class="mini-board-host">
           <div
-            v-if="miniBoard"
+            v-if="boardState"
             class="mini-board"
-            :style="{ '--board-cols': miniBoard.cols, '--board-rows': miniBoard.rows }"
+            :style="{ '--board-cols': dims.cols, '--board-rows': dims.rows }"
           >
             <div
-              v-for="(slot, i) in miniBoard.cells"
+              v-for="(value, i) in boardState.board"
               :key="i"
               class="chess-cell"
-              :class="[
-                slot === 'Hidden'
-                  ? 'hidden'
-                  : slot === 'Empty'
-                    ? 'empty'
-                    : slot.startsWith('R_')
-                      ? 'red'
-                      : 'black',
-              ]"
+              :class="cellClass(value, boardState.shown[i])"
             >
-              {{ pieceText(slot) }}
+              {{ pieceText(value) }}<span v-if="cellClass(value, boardState.shown[i]).includes('god-hidden')" class="god-mark">?</span>
             </div>
           </div>
+        </div>
+
+        <!-- 当前步信息 -->
+        <div class="replay-state-bar">
+          <span class="state-score">红 {{ boardState?.scores[0] }} · 黑 {{ boardState?.scores[1] }}</span>
+          <span class="state-hidden">暗子 {{ boardState?.hidden }}</span>
+          <span v-if="currentMove" class="kind-badge" :class="currentMove.kind">
+            {{ KIND_LABELS[currentMove.kind] ?? currentMove.kind }}
+          </span>
         </div>
 
         <div class="replay-toolbar">
@@ -145,27 +193,67 @@ function roleLabel(side: 'red' | 'black'): string {
             ◀ 上一步
           </button>
           <span class="ply-indicator">
-            第 {{ store.plyIndex }} / {{ store.replay.plies.length - 1 }} 步
+            第 {{ store.plyIndex }} / {{ stateCount - 1 }} 步
           </span>
           <button
             class="mini"
-            :disabled="store.plyIndex >= store.replay.plies.length - 1"
+            :disabled="store.plyIndex >= stateCount - 1"
             @click="stepPly(1)"
           >
             下一步 ▶
           </button>
         </div>
 
+        <!-- 侧栏：暗子袋 + 决策诊断 -->
+        <div class="replay-side-panels">
+          <div class="side-panel">
+            <h4>剩余暗子</h4>
+            <table class="bag-table">
+              <thead>
+                <tr><th>类型</th><th>红</th><th>黑</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="t in BAG_TYPES" :key="t">
+                  <td>{{ pieceText('R_' + t) }}{{ pieceText('B_' + t) }}</td>
+                  <td>{{ hiddenBag.red[t] }}</td>
+                  <td>{{ hiddenBag.black[t] }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="side-panel">
+            <h4>决策诊断</h4>
+            <template v-if="currentMove?.stats">
+              <div v-if="currentMove.stats.mcts" class="stat-block">
+                <div class="stat-title">MCTS</div>
+                <div class="stat-line">{{ statRow('模拟', currentMove.stats.mcts.actual_sims) }} / {{ currentMove.stats.mcts.budget }}</div>
+                <div class="stat-line">{{ statRow('深度', currentMove.stats.mcts.max_depth) }} · {{ statRow('节点', currentMove.stats.mcts.nodes) }}</div>
+                <div class="stat-line">{{ statRow('耗时', currentMove.stats.mcts.elapsed_ms + 'ms') }}</div>
+              </div>
+              <div v-if="currentMove.stats.nnue" class="stat-block">
+                <div class="stat-title">NNUE（{{ currentMove.stats.nnue.engine }}）</div>
+                <div class="stat-line">{{ statRow('深度', currentMove.stats.nnue.reached_depth) }} / {{ currentMove.stats.nnue.depth }}</div>
+                <div class="stat-line">{{ statRow('节点', currentMove.stats.nnue.nodes) }}</div>
+                <div class="stat-line">{{ statRow('耗时', currentMove.stats.nnue.elapsed_ms + 'ms') }}</div>
+              </div>
+            </template>
+            <div v-else class="stat-empty">
+              {{ currentMove ? '该步无搜索诊断（人类 / 规则步）' : '初始局面' }}
+            </div>
+          </div>
+        </div>
+
         <div class="replay-ply-list">
           <button
-            v-for="(ply, i) in store.replay.plies"
-            :key="ply.ply"
+            v-for="(m, i) in store.replay.moves"
+            :key="m.ply"
             class="replay-ply-row"
-            :class="{ active: store.plyIndex === i }"
-            @click="gotoPly(i)"
+            :class="{ active: store.plyIndex === i + 1 }"
+            @click="gotoPly(i + 1)"
           >
-            <span class="history-ply">{{ ply.ply }}</span>
-            <span class="replay-ply-desc">{{ plyDesc(i) }}</span>
+            <span class="history-ply">{{ m.ply }}</span>
+            <span class="replay-ply-desc">{{ stepDesc(m) }}</span>
+            <span class="replay-ply-kind">{{ KIND_LABELS[m.kind] ?? m.kind }}</span>
           </button>
         </div>
 
@@ -205,3 +293,90 @@ function roleLabel(side: 'red' | 'black'): string {
     </div>
   </aside>
 </template>
+
+<style scoped>
+/* 上帝视角暗子：身份可见但半透明 + 角标 "?" */
+.god-hidden {
+  opacity: 0.55;
+  position: relative;
+}
+.god-mark {
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  font-size: 0.6em;
+  opacity: 0.8;
+}
+.termination-badge,
+.source-badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 0.75em;
+  background: var(--panel-2, rgba(127, 140, 141, 0.2));
+}
+.source-badge {
+  color: var(--warn, #e67e22);
+}
+.replay-state-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+  font-size: 0.9em;
+}
+.kind-badge {
+  padding: 1px 8px;
+  border-radius: 8px;
+  background: var(--panel-2, rgba(127, 140, 141, 0.2));
+}
+.kind-badge.flip,
+.kind-badge.reveal-attack {
+  color: var(--accent, #e67e22);
+}
+.kind-badge.capture {
+  color: var(--danger, #c0392b);
+}
+.replay-side-panels {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+}
+.side-panel {
+  flex: 1;
+  border: 1px solid var(--border, rgba(127, 140, 141, 0.3));
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.8em;
+}
+.side-panel h4 {
+  margin: 0 0 4px;
+  font-size: 0.9em;
+}
+.bag-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.bag-table th,
+.bag-table td {
+  text-align: center;
+  padding: 1px 2px;
+}
+.stat-block {
+  margin-bottom: 6px;
+}
+.stat-title {
+  font-weight: 600;
+}
+.stat-line {
+  opacity: 0.85;
+}
+.stat-empty {
+  opacity: 0.6;
+}
+.replay-ply-kind {
+  margin-left: auto;
+  opacity: 0.6;
+  font-size: 0.85em;
+}
+</style>

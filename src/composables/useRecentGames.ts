@@ -14,9 +14,9 @@ interface RecentGamesStore {
   error: string | null;
   /** 当前正在推演的归档局（null = 列表视图） */
   detail: ArchivedGameDetail | null;
-  /** 当前推演的逐 ply 局面序列 */
+  /** 当前推演的上帝视角回放 */
   replay: ReplayResp | null;
-  /** 当前查看的 ply 下标（0 = 初始局面） */
+  /** 当前查看的局面态下标（0 = 初始局面，moves.length = 终局） */
   plyIndex: number;
   busy: boolean;
 }
@@ -46,7 +46,7 @@ async function refresh() {
   }
 }
 
-/** 打开某局的推演视图：并行拉取归档详情与逐 ply 重放，默认停在终局。 */
+/** 打开某局的推演视图：并行拉取归档详情与上帝视角回放，默认停在终局。 */
 async function openGame(id: string) {
   if (store.busy) return;
   store.busy = true;
@@ -54,7 +54,7 @@ async function openGame(id: string) {
     const [detail, replay] = await Promise.all([api.getRecentGame(id), api.getReplay(id)]);
     store.detail = detail;
     store.replay = replay;
-    store.plyIndex = replay.plies.length - 1;
+    store.plyIndex = replay.moves.length;
   } catch (e) {
     console.error('Open recent game failed:', e);
     toast.error('加载归档对局失败: ' + e);
@@ -70,15 +70,15 @@ function closeGame() {
   store.plyIndex = 0;
 }
 
-/** 推演 ply 步进（正 = 前进，负 = 后退），带边界钳制。 */
+/** 推演局面态步进（正 = 前进，负 = 后退），带边界钳制。 */
 function stepPly(delta: number) {
-  const total = store.replay?.plies.length ?? 1;
+  const total = (store.replay?.moves.length ?? 0) + 1;
   store.plyIndex = Math.min(total - 1, Math.max(0, store.plyIndex + delta));
 }
 
-/** 直接跳到某 ply。 */
+/** 直接跳到某局面态。 */
 function gotoPly(index: number) {
-  const total = store.replay?.plies.length ?? 1;
+  const total = (store.replay?.moves.length ?? 0) + 1;
   store.plyIndex = Math.min(total - 1, Math.max(0, index));
 }
 

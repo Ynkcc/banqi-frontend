@@ -458,12 +458,18 @@ export interface ArchivedGameSummary {
   slots: SlotsView;
 }
 
-/** 归档详情：附初始/终局 BFEN 与完整动作序列、逐子记录（推演复用的真源）。 */
+/** 归档详情：附初始/终局 BFEN、完整动作序列、逐步快照与决策诊断。 */
 export interface ArchivedGameDetail extends ArchivedGameSummary {
   initial_fen: string;
   final_fen: string;
   actions: ReplayAction[];
   moves: HistoryMove[];
+  /** 逐步步前快照（v2 二进制 hex，与 moves 对齐；旧归档缺省） */
+  snapshots?: string[];
+  /** 终局盘面快照（v2 二进制 hex；旧归档缺省） */
+  final_snapshot?: string;
+  /** 逐步决策诊断（与 moves 对齐；人类步 / 旧归档为 null） */
+  step_stats?: (StepStats | null)[];
 }
 
 /** GET /api/games/recent 响应。 */
@@ -471,19 +477,83 @@ export interface RecentGamesResp {
   games: ArchivedGameSummary[];
 }
 
-/** 推演的单一 ply 局面：BFEN 文本 + 行棋方 + 到达此局的动作。 */
-export interface ReplayPly {
-  ply: number;
-  player: string;
-  fen: string;
-  /** 到达该局面的动作（ply 0 = 初始局面时缺省） */
-  last_action?: number;
+/** 双方剩余暗子按类型计数（兵0 炮1 马2 车3 象4 仕5 将6）。 */
+export interface HiddenBag {
+  red: number[];
+  black: number[];
 }
 
-/** GET /api/games/recent/:id/replay 响应：逐 ply 的忠实重放。 */
+/** 单步决策诊断（MCTS / NNUE 搜索统计；缺省 = 该步无搜索）。 */
+export interface StepStats {
+  mcts?: MctsStats;
+  nnue?: NnueStats;
+}
+
+export interface MctsStats {
+  reused: boolean;
+  budget: number;
+  actual_sims: number;
+  max_depth: number;
+  nodes: number;
+  elapsed_ms: number;
+}
+
+export interface NnueStats {
+  engine: string;
+  mode: string;
+  depth: number;
+  budget: number;
+  time_limit_ms: number;
+  nodes: number;
+  reached_depth: number;
+  elapsed_ms: number;
+}
+
+/** 回放单步（上帝视角）：步前棋盘 + 步类型 + env 分值 + 决策诊断。 */
+export interface ReplayStep {
+  ply: number;
+  /** "Red" / "Black" */
+  player: string;
+  action: number;
+  from: number;
+  to: number;
+  /** "flip" | "move" | "capture" | "reveal-attack" */
+  kind: string;
+  is_chance: boolean;
+  revealed?: string;
+  captured?: string;
+  move_counter: number;
+  /** [red, black] 步前剩余子力分 */
+  scores: [number, number];
+  /** 步前上帝视角棋盘："Empty" | "Hidden" | "R_Sol" 等短码 */
+  board: string[];
+  /** 每格明暗标记（暗子 false） */
+  revealed_at: boolean[];
+  hidden_bag: HiddenBag;
+  /** "snapshot" | "replay" */
+  board_source: string;
+  stats?: StepStats;
+}
+
+/** GET /api/games/recent/:id/replay 响应：上帝视角完整回放。 */
 export interface ReplayResp {
   game_id: string;
   variant: string;
+  /** "decisive" | "quiet_draw" | "max_steps" | "unspecified" */
+  termination: string;
+  /** "red" / "black" / "draw" */
+  winner?: string;
+  /** 双方身份描述 */
+  side_red: string;
+  side_black: string;
   initial_fen: string;
-  plies: ReplayPly[];
+  initial_board: string[];
+  initial_shown: boolean[];
+  final_board: string[];
+  final_shown: boolean[];
+  /** 终局双方剩余子力分 [red, black] */
+  final_scores: [number, number];
+  /** "snapshot" | "replay" */
+  board_source: string;
+  moves: ReplayStep[];
 }
