@@ -11,6 +11,8 @@
 import type {
   AgentParamsCfg,
   AgentView,
+  ArchivedGameDetail,
+  ArchivedGameSummary,
   Capabilities,
   CreateAgentCfg,
   EngineSettings,
@@ -26,6 +28,7 @@ import type {
   ModelList,
   NnueBudgetMode,
   OpeningScenarioCfg,
+  ReplayResp,
   ScenariosResp,
   SlotCfg,
   SlotsCfg,
@@ -293,6 +296,38 @@ export const api = {
   },
   async nnueSearch(): Promise<ExRootInfo> {
     return http<ExRootInfo>(`/api/games/${requireGameId()}/nnue/search`, { method: 'POST' });
+  },
+
+  // ==========================================================================
+  // 最近对局归档与重新推演
+  // ==========================================================================
+
+  /** GET /api/games/recent?limit=n：最近 n 局终局归档（含行棋方角色与胜者）。 */
+  async listRecentGames(limit?: number): Promise<ArchivedGameSummary[]> {
+    const query = limit ? `?limit=${limit}` : '';
+    const resp = await http<{ games: ArchivedGameSummary[] }>(`/api/games/recent${query}`);
+    return resp.games;
+  },
+  /** GET /api/games/recent/:id：单局归档详情（初始/终局 BFEN、动作序列、逐子记录）。 */
+  async getRecentGame(id: string): Promise<ArchivedGameDetail> {
+    return http<ArchivedGameDetail>(`/api/games/recent/${id}`);
+  },
+  /** GET /api/games/recent/:id/replay：按初始局面 + 动作序列逐 ply 忠实重放。 */
+  async getReplay(id: string): Promise<ReplayResp> {
+    return http<ReplayResp>(`/api/games/recent/${id}/replay`);
+  },
+  /**
+   * POST /api/games/recent/:id/replay：复演——从归档初始局面建一局新对局
+   * （缺省双方 Human，可在主棋盘重走或再改槽位），并切换当前对局到新局。
+   */
+  async replayArchived(id: string): Promise<GameState> {
+    const created = await http<{ game_id: string; state: GameState }>(
+      `/api/games/recent/${id}/replay`,
+      { method: 'POST', body: JSON.stringify({}) },
+    );
+    currentGameId = created.game_id;
+    recordSlotsFromState(created.state);
+    return created.state;
   },
 
   // ==========================================================================

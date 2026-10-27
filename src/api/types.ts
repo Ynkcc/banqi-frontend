@@ -430,3 +430,60 @@ export interface VariantScenarios {
 export interface ScenariosResp {
   variants: VariantScenarios[];
 }
+
+// ============================================================================
+// 最近对局归档与重新推演（GET/POST /api/games/recent*）
+// ============================================================================
+
+/** 归档动作：动作索引 + 机会步实际翻出的棋子（FEN 字母编码，小写为黑方）。 */
+export interface ReplayAction {
+  action: number;
+  /** FEN 字母（P/C/N/R/B/A/K，大小写表红黑）；非机会步缺省 */
+  revealed?: string;
+}
+
+/** 最近对局归档摘要（含行棋方角色与胜负结果）。 */
+export interface ArchivedGameSummary {
+  game_id: string;
+  variant: string;
+  /** 创建 / 终局时间（Unix 秒） */
+  created_at: number;
+  finished_at: number;
+  total_steps: number;
+  over: boolean;
+  /** "red" / "black" / "draw" */
+  winner?: string;
+  over_reason?: string;
+  /** 红/黑双方行棋方角色（Human / 策略 / Agent） */
+  slots: SlotsView;
+}
+
+/** 归档详情：附初始/终局 BFEN 与完整动作序列、逐子记录（推演复用的真源）。 */
+export interface ArchivedGameDetail extends ArchivedGameSummary {
+  initial_fen: string;
+  final_fen: string;
+  actions: ReplayAction[];
+  moves: HistoryMove[];
+}
+
+/** GET /api/games/recent 响应。 */
+export interface RecentGamesResp {
+  games: ArchivedGameSummary[];
+}
+
+/** 推演的单一 ply 局面：BFEN 文本 + 行棋方 + 到达此局的动作。 */
+export interface ReplayPly {
+  ply: number;
+  player: string;
+  fen: string;
+  /** 到达该局面的动作（ply 0 = 初始局面时缺省） */
+  last_action?: number;
+}
+
+/** GET /api/games/recent/:id/replay 响应：逐 ply 的忠实重放。 */
+export interface ReplayResp {
+  game_id: string;
+  variant: string;
+  initial_fen: string;
+  plies: ReplayPly[];
+}
