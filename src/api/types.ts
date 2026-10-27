@@ -106,9 +106,9 @@ export interface AgentView {
   mcts_sims?: number;
   engine_budget?: number;
   budget_mode?: string;
-  nnue_depth?: number;
-  nnue_budget?: number;
-  nnue_time_ms?: number;
+  budget_depth?: number;
+  budget?: number;
+  budget_time_ms?: number;
   search_timeout_ms?: number;
 }
 
@@ -124,6 +124,10 @@ export interface CreateAgentCfg {
 export interface AgentParamsCfg {
   mcts_sims?: number;
   engine_budget?: number;
+  /** Expectimax（规则评估器）预算模式（nodes / depth_nodes / time，缺省 nodes） */
+  engine_budget_mode?: NnueBudgetMode;
+  engine_depth?: number;
+  engine_time_ms?: number;
   nnue_budget_mode?: NnueBudgetMode;
   nnue_depth?: number;
   nnue_budget?: number;

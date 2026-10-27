@@ -77,10 +77,32 @@ function kindLabel(agent: AgentView): string {
         <span>搜索次数</span>
         <input v-model.number="store.form.mctsSims" type="number" min="1" />
       </label>
-      <label v-if="store.form.kind === 'Expectimax'" class="field">
-        <span>节点预算</span>
-        <input v-model.number="store.form.engineBudget" type="number" min="1" />
-      </label>
+      <template v-if="store.form.kind === 'Expectimax'">
+        <label class="field">
+          <span>预算模式</span>
+          <select v-model="store.form.engineBudgetMode">
+            <option value="nodes">纯节点预算</option>
+            <option value="depth_nodes">深度 + 节点预算</option>
+            <option value="time">用时</option>
+          </select>
+        </label>
+        <label v-if="store.form.engineBudgetMode !== 'time'" class="field">
+          <span>节点预算</span>
+          <input v-model.number="store.form.engineBudget" type="number" min="1" />
+        </label>
+        <label v-if="store.form.engineBudgetMode === 'depth_nodes'" class="field">
+          <span>搜索深度</span>
+          <input v-model.number="store.form.engineDepth" type="number" min="1" />
+        </label>
+        <label v-if="store.form.engineBudgetMode === 'time'" class="field">
+          <span>时间预算（毫秒）</span>
+          <input v-model.number="store.form.engineTimeMs" type="number" min="1" />
+        </label>
+        <label class="field">
+          <span>搜索超时（毫秒）</span>
+          <input v-model.number="store.form.searchTimeoutMs" type="number" min="1" />
+        </label>
+      </template>
       <template v-if="store.form.kind === 'ExpectimaxNnue'">
         <label class="field">
           <span>预算模式</span>
@@ -139,7 +161,42 @@ function kindLabel(agent: AgentView): string {
           <span>节点预算</span>
           <input v-model.number="draftOf(agent).engine_budget" type="number" min="1" />
         </label>
-        <label v-if="agent.budget_mode" class="field">
+        <label
+          v-if="agent.kind === 'Expectimax' && draftOf(agent).engine_budget_mode"
+          class="field"
+        >
+          <span>预算模式</span>
+          <select v-model="draftOf(agent).engine_budget_mode">
+            <option value="nodes">纯节点预算</option>
+            <option value="depth_nodes">深度 + 节点预算</option>
+            <option value="time">用时</option>
+          </select>
+        </label>
+        <label
+          v-if="agent.kind === 'Expectimax' && draftOf(agent).engine_budget_mode !== 'time'"
+          class="field"
+        >
+          <span>节点预算</span>
+          <input v-model.number="draftOf(agent).engine_budget" type="number" min="1" />
+        </label>
+        <label
+          v-if="agent.kind === 'Expectimax' && draftOf(agent).engine_budget_mode === 'depth_nodes'"
+          class="field"
+        >
+          <span>搜索深度</span>
+          <input v-model.number="draftOf(agent).engine_depth" type="number" min="1" />
+        </label>
+        <label
+          v-if="agent.kind === 'Expectimax' && draftOf(agent).engine_budget_mode === 'time'"
+          class="field"
+        >
+          <span>时间预算（毫秒）</span>
+          <input v-model.number="draftOf(agent).engine_time_ms" type="number" min="1" />
+        </label>
+        <label
+          v-if="agent.kind === 'ExpectimaxNnue' && agent.budget_mode"
+          class="field"
+        >
           <span>预算模式</span>
           <select v-model="draftOf(agent).nnue_budget_mode">
             <option value="nodes">纯节点预算</option>
@@ -147,18 +204,24 @@ function kindLabel(agent: AgentView): string {
             <option value="time">用时</option>
           </select>
         </label>
-        <label v-if="agent.budget_mode && draftOf(agent).nnue_budget_mode !== 'time'" class="field">
+        <label
+          v-if="agent.kind === 'ExpectimaxNnue' && draftOf(agent).nnue_budget_mode !== 'time'"
+          class="field"
+        >
           <span>节点预算</span>
           <input v-model.number="draftOf(agent).nnue_budget" type="number" min="1" />
         </label>
         <label
-          v-if="agent.budget_mode && draftOf(agent).nnue_budget_mode === 'depth_nodes'"
+          v-if="agent.kind === 'ExpectimaxNnue' && draftOf(agent).nnue_budget_mode === 'depth_nodes'"
           class="field"
         >
           <span>搜索深度</span>
           <input v-model.number="draftOf(agent).nnue_depth" type="number" min="1" />
         </label>
-        <label v-if="agent.budget_mode && draftOf(agent).nnue_budget_mode === 'time'" class="field">
+        <label
+          v-if="agent.kind === 'ExpectimaxNnue' && draftOf(agent).nnue_budget_mode === 'time'"
+          class="field"
+        >
           <span>时间预算（毫秒）</span>
           <input v-model.number="draftOf(agent).nnue_time_ms" type="number" min="1" />
         </label>

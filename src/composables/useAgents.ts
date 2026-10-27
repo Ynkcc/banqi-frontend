@@ -31,6 +31,10 @@ interface AgentCreateForm {
   modelFile: string;
   mctsSims: number;
   engineBudget: number;
+  /** Expectimax（规则评估器）预算模式 */
+  engineBudgetMode: NnueBudgetMode;
+  engineDepth: number;
+  engineTimeMs: number;
   nnueBudgetMode: NnueBudgetMode;
   nnueDepth: number;
   nnueBudget: number;
@@ -66,6 +70,9 @@ const store = reactive<AgentsStore>({
     modelFile: '',
     mctsSims: 200,
     engineBudget: 300000,
+    engineBudgetMode: 'nodes',
+    engineDepth: 8,
+    engineTimeMs: 5000,
     nnueBudgetMode: 'depth_nodes',
     nnueDepth: 8,
     nnueBudget: 200000,
@@ -88,7 +95,13 @@ function formParams(form: AgentCreateForm): AgentParamsCfg {
     return { mcts_sims: form.mctsSims };
   }
   if (form.kind === 'Expectimax') {
-    return { engine_budget: form.engineBudget };
+    return {
+      engine_budget: form.engineBudget,
+      engine_budget_mode: form.engineBudgetMode,
+      engine_depth: form.engineDepth,
+      engine_time_ms: form.engineTimeMs,
+      search_timeout_ms: form.searchTimeoutMs,
+    };
   }
   if (form.kind === 'ExpectimaxNnue') {
     return {
@@ -146,17 +159,34 @@ async function remove(agent: AgentView) {
 /** Agent 卡片内的搜索配置草稿（首次编辑时初始化为当前生效值）。 */
 function draftOf(agent: AgentView): AgentParamsCfg {
   if (!store.drafts[agent.id]) {
-    store.drafts[agent.id] = {
-      ...(agent.mcts_sims !== undefined ? { mcts_sims: agent.mcts_sims } : {}),
-      ...(agent.engine_budget !== undefined ? { engine_budget: agent.engine_budget } : {}),
-      ...(agent.budget_mode ? { nnue_budget_mode: agent.budget_mode as NnueBudgetMode } : {}),
-      ...(agent.nnue_depth !== undefined ? { nnue_depth: agent.nnue_depth } : {}),
-      ...(agent.nnue_budget !== undefined ? { nnue_budget: agent.nnue_budget } : {}),
-      ...(agent.nnue_time_ms !== undefined ? { nnue_time_ms: agent.nnue_time_ms } : {}),
-      ...(agent.search_timeout_ms !== undefined
-        ? { search_timeout_ms: agent.search_timeout_ms }
-        : {}),
-    };
+    if (agent.kind === 'Expectimax') {
+      // Expectimax（规则评估器）：编辑 engine_* 预算族
+      store.drafts[agent.id] = {
+        ...(agent.engine_budget !== undefined ? { engine_budget: agent.engine_budget } : {}),
+        ...(agent.budget_mode
+          ? { engine_budget_mode: agent.budget_mode as NnueBudgetMode }
+          : {}),
+        ...(agent.budget_depth !== undefined ? { engine_depth: agent.budget_depth } : {}),
+        ...(agent.budget_time_ms !== undefined
+          ? { engine_time_ms: agent.budget_time_ms }
+          : {}),
+        ...(agent.search_timeout_ms !== undefined
+          ? { search_timeout_ms: agent.search_timeout_ms }
+          : {}),
+      };
+    } else {
+      store.drafts[agent.id] = {
+        ...(agent.mcts_sims !== undefined ? { mcts_sims: agent.mcts_sims } : {}),
+        ...(agent.engine_budget !== undefined ? { engine_budget: agent.engine_budget } : {}),
+        ...(agent.budget_mode ? { nnue_budget_mode: agent.budget_mode as NnueBudgetMode } : {}),
+        ...(agent.budget_depth !== undefined ? { nnue_depth: agent.budget_depth } : {}),
+        ...(agent.budget !== undefined ? { nnue_budget: agent.budget } : {}),
+        ...(agent.budget_time_ms !== undefined ? { nnue_time_ms: agent.budget_time_ms } : {}),
+        ...(agent.search_timeout_ms !== undefined
+          ? { search_timeout_ms: agent.search_timeout_ms }
+          : {}),
+      };
+    }
   }
   return store.drafts[agent.id];
 }

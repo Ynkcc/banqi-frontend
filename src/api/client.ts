@@ -366,6 +366,9 @@ function paramsBody(p: AgentParamsCfg): Record<string, unknown> {
   return {
     ...(p.mcts_sims !== undefined ? { mctsSims: p.mcts_sims } : {}),
     ...(p.engine_budget !== undefined ? { engineBudget: p.engine_budget } : {}),
+    ...(p.engine_budget_mode ? { engineBudgetMode: p.engine_budget_mode } : {}),
+    ...(p.engine_depth !== undefined ? { engineDepth: p.engine_depth } : {}),
+    ...(p.engine_time_ms !== undefined ? { engineTimeMs: p.engine_time_ms } : {}),
     ...(p.nnue_budget_mode ? { nnueBudgetMode: p.nnue_budget_mode } : {}),
     ...(p.nnue_depth !== undefined ? { nnueDepth: p.nnue_depth } : {}),
     ...(p.nnue_budget !== undefined ? { nnueBudget: p.nnue_budget } : {}),

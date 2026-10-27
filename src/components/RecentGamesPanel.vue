@@ -225,7 +225,9 @@ function statRow(label: string, value?: number | string | boolean): string {
                 <div class="stat-line">{{ statRow('耗时', currentMove.stats.mcts.elapsed_ms + 'ms') }}</div>
               </div>
               <div v-if="currentMove.stats.nnue" class="stat-block">
-                <div class="stat-title">NNUE（{{ currentMove.stats.nnue.engine }}）</div>
+                <div class="stat-title">
+                  {{ currentMove.stats.nnue.engine === 'rule' ? 'Expectimax（规则评估器）' : 'NNUE' }}
+                </div>
                 <div class="stat-line">{{ statRow('深度', currentMove.stats.nnue.reached_depth) }} / {{ currentMove.stats.nnue.depth }}</div>
                 <div class="stat-line">{{ statRow('节点', currentMove.stats.nnue.nodes) }}</div>
                 <div class="stat-line">{{ statRow('耗时', currentMove.stats.nnue.elapsed_ms + 'ms') }}</div>
