@@ -320,10 +320,10 @@ export const api = {
    * POST /api/games/recent/:id/replay：复演——从归档初始局面建一局新对局
    * （缺省双方 Human，可在主棋盘重走或再改槽位），并切换当前对局到新局。
    */
-  async replayArchived(id: string): Promise<GameState> {
+  async replayArchived(id: string, fromPly = 0): Promise<GameState> {
     const created = await http<{ game_id: string; state: GameState }>(
       `/api/games/recent/${id}/replay`,
-      { method: 'POST', body: JSON.stringify({}) },
+      { method: 'POST', body: JSON.stringify({ fromPly }) },
     );
     currentGameId = created.game_id;
     recordSlotsFromState(created.state);

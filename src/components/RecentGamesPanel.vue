@@ -286,8 +286,8 @@ function statRow(label: string, value?: number | string | boolean): string {
         </div>
 
         <div class="btn-row">
-          <button :disabled="store.busy" @click="replayAsNew(store.detail.game_id)">
-            复演为对局（从初始局面重走）
+          <button :disabled="store.busy" @click="replayAsNew(store.detail.game_id, store.plyIndex)">
+            复演为对局（从当前步数重走）
           </button>
         </div>
         <button class="replay-back" @click="closeGame">← 返回最近对局列表</button>
