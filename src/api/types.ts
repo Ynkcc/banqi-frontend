@@ -553,6 +553,10 @@ export interface ReplayResp {
   initial_fen: string;
   initial_board: string[];
   initial_shown: boolean[];
+  /** 初始双方子力分 [red, black] */
+  initial_scores: [number, number];
+  /** 初始双方剩余暗子按类型计数 */
+  initial_hidden_bag: HiddenBag;
   final_board: string[];
   final_shown: boolean[];
   /** 终局双方剩余子力分 [red, black] */

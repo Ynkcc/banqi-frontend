@@ -1,14 +1,29 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
 import { useRecentGames } from '../composables/useRecentGames';
+import { useToast } from '../composables/useToast';
 import { pieceText, variantDims } from '../domain/pieces';
 import type { HiddenBag, ReplayStep } from '../api/types';
 
 defineEmits<{ close: [] }>();
 
 const { store, refresh, openGame, closeGame, stepPly, gotoPly, replayAsNew } = useRecentGames();
+const toast = useToast();
 
 onMounted(refresh);
+
+/** 复制对局 uuid（供外部工具/排查引用）。 */
+async function copyGameId() {
+  const id = store.detail?.game_id;
+  if (!id) return;
+  try {
+    await navigator.clipboard.writeText(id);
+    toast.success('对局 UUID 已复制到剪贴板', 2000);
+  } catch (e) {
+    console.error('Copy game id failed:', e);
+    toast.error('复制失败: ' + e);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 上帝视角回放：服务端已重建逐步棋盘（board/revealed_at/hidden_bag/诊断），
@@ -154,6 +169,15 @@ function statRow(label: string, value?: number | string | boolean): string {
             <span class="termination-badge">{{ TERMINATION_LABELS[store.replay.termination] ?? store.replay.termination }}</span>
             <span v-if="store.replay.board_source === 'replay'" class="source-badge" title="快照缺失，由动作序列推断重建">动作推断</span>
           </div>
+          <div class="recent-roles">
+            <button
+              class="source-badge game-id-badge"
+              :title="'点击复制完整 UUID: ' + store.detail.game_id"
+              @click="copyGameId"
+            >
+              UUID {{ store.detail.game_id.slice(0, 8) }}…（点击复制）
+            </button>
+          </div>
         </div>
 
         <div class="mini-board-host">
@@ -241,6 +265,14 @@ function statRow(label: string, value?: number | string | boolean): string {
 
         <div class="replay-ply-list">
           <button
+            class="replay-ply-row"
+            :class="{ active: store.plyIndex === 0 }"
+            @click="gotoPly(0)"
+          >
+            <span class="history-ply">0</span>
+            <span class="replay-ply-desc">初始局面</span>
+          </button>
+          <button
             v-for="(m, i) in store.replay.moves"
             :key="m.ply"
             class="replay-ply-row"
@@ -313,6 +345,18 @@ function statRow(label: string, value?: number | string | boolean): string {
 }
 .source-badge {
   color: var(--warn, #e67e22);
+}
+.game-id-badge {
+  margin-left: 0;
+  border: none;
+  cursor: pointer;
+  color: var(--text-dim, #7f8c8d);
+  font: inherit;
+  font-size: 0.75em;
+  font-family: monospace;
+}
+.game-id-badge:hover {
+  color: var(--accent, #3498db);
 }
 .replay-state-bar {
   display: flex;
