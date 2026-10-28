@@ -157,6 +157,8 @@ export interface Suggestion {
   score?: number;
   mcts_stats?: MctsSearchStats;
   nnue_stats?: NnueSearchStats;
+  /** 搜索诊断信息（Expectimax 根节点摘要 + 搜索统计；与手动搜索接口同构） */
+  search_info?: ExRootInfo;
 }
 
 /** 一手棋的决策记录（棋谱项）。棋子字段为前端短码格式（"R_Sol" / "B_Gen" …）。 */
@@ -491,6 +493,8 @@ export interface HiddenBag {
 export interface StepStats {
   mcts?: MctsStats;
   nnue?: NnueStats;
+  /** 手动备注（外部连线器手动推进时回填的决策说明） */
+  note?: string;
 }
 
 export interface MctsStats {

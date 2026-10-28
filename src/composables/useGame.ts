@@ -277,6 +277,10 @@ async function requestDryRun() {
         : `位置${suggestion.from} → 位置${suggestion.to}`;
       const scoreText = suggestion.score !== undefined ? `（评分 ${suggestion.score.toFixed(3)}）` : '';
       appendLog(`[dry-run] ${suggestion.player === 'Red' ? '红方' : '黑方'} 建议走法: ${desc}${scoreText}`);
+      const si = suggestion.search_info;
+      if (si) {
+        appendLog(`[dry-run] 搜索诊断: 模式=${si.stats.mode} 深度=${si.stats.reached_depth} 节点=${si.stats.nodes} 耗时=${si.stats.elapsed_ms}ms 根值=${si.root.value.toFixed(3)}`);
+      }
     }
   } catch (e) {
     console.error('dry_run failed:', e);
