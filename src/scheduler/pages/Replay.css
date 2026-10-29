@@ -1,0 +1,246 @@
+/* 回放棋盘（对齐 banqi-frontend BoardGrid.vue / global.css 的视觉口径）。 */
+
+.replay-layout {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.replay-board-panel {
+  flex: 0 1 auto;
+}
+
+.chess-board {
+  display: grid;
+  grid-template-columns: repeat(var(--board-cols), 1fr);
+  gap: 4px;
+  width: min(560px, calc(100vw - 320px));
+  min-width: 320px;
+  background: #c8b28a;
+  border: 3px solid #8a6f47;
+  border-radius: 8px;
+  padding: 10px;
+  touch-action: manipulation;
+}
+
+.chess-cell {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(15px, calc(560px / var(--board-cols) * 0.42), 30px);
+  font-weight: 700;
+  border-radius: 8px;
+  background: #efe0c0;
+  border: 1px solid #cbb98d;
+  user-select: none;
+}
+
+.chess-cell .coord-label {
+  position: absolute;
+  top: 1px;
+  left: 3px;
+  font-size: 9px;
+  font-weight: 400;
+  color: #b5a179;
+  line-height: 1;
+}
+
+.chess-cell.empty {
+  background: #e6d3ab;
+}
+
+.chess-cell.red {
+  color: #b3282d;
+  background: #f7e7c3;
+  box-shadow: inset 0 0 0 2px #d9b98a, 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+.chess-cell.black {
+  color: #1e1e1e;
+  background: #e7d6b4;
+  box-shadow: inset 0 0 0 2px #b09a72, 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+/* 未翻开：暗面样式；上帝视角下身份仍可见（半透明小字）。 */
+.chess-cell.hidden {
+  background: #5d4a36;
+  border-color: #3f3222;
+  color: transparent;
+}
+
+.chess-cell.hidden .true-piece {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72em;
+  opacity: 0.75;
+  font-weight: 400;
+}
+
+/* 暗子蒙板下按棋子方着色：红方暖红、黑方冷灰 */
+.chess-cell.hidden .true-piece.tp-red {
+  color: #e88484;
+  text-shadow: 0 0 3px rgba(60, 20, 20, 0.9);
+}
+
+.chess-cell.hidden .true-piece.tp-black {
+  color: #c9cdd6;
+  text-shadow: 0 0 3px rgba(10, 10, 15, 0.9);
+}
+
+.chess-cell.hidden::after {
+  content: '?';
+  position: absolute;
+  bottom: 1px;
+  right: 3px;
+  font-size: 10px;
+  line-height: 1;
+  color: #c9b68d;
+  opacity: 0.7;
+}
+
+.chess-cell.last-from,
+.chess-cell.last-to {
+  outline: 3px solid #d46b08;
+  outline-offset: -3px;
+  z-index: 1;
+}
+
+.chess-cell.last-to {
+  box-shadow: 0 0 10px rgba(212, 107, 8, 0.65);
+}
+
+.replay-side {
+  flex: 1 1 320px;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.replay-score-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.replay-move-list {
+  max-height: 260px;
+  overflow: auto;
+}
+
+.replay-move-item {
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.replay-move-item:hover {
+  background: #f0f2f5;
+}
+
+.replay-move-item.active {
+  background: #e6f4ff;
+  color: #1677ff;
+}
+
+/* 教师策略热力角标 */
+.policy-badge {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #237804;
+  line-height: 1;
+  text-shadow: 0 0 2px #fff;
+  pointer-events: none;
+}
+
+/* 走势图 */
+.replay-chart {
+  width: 100%;
+  height: 56px;
+  display: block;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+}
+
+.replay-chart-label {
+  font-size: 11px;
+  color: #888;
+  margin: 4px 0 2px;
+}
+
+.replay-diag-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px 8px;
+  font-size: 12px;
+}
+
+.replay-diag-grid .k {
+  color: #999;
+}
+
+.replay-diag-grid .v {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.replay-diag-warn {
+  color: #d46b08;
+  font-weight: 600;
+}
+
+/* 棋谱列表中的探索采样步标记（expl_random = 1） */
+.replay-expl-tag {
+  margin-inline-start: 4px;
+  margin-inline-end: 0;
+  font-size: 10px;
+  line-height: 16px;
+  padding-inline: 4px;
+  color: #d46b08;
+  border-color: #d46b08;
+}
+
+/* 暗子袋 */
+.replay-bag-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.replay-bag-item {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.replay-bag-item.red {
+  color: #b3282d;
+}
+
+.replay-bag-item.black {
+  color: #1e1e1e;
+}
+
+.replay-bag-item em {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 11px;
+  color: #888;
+  margin-left: 1px;
+}
+
+.replay-bag-item.zero {
+  opacity: 0.32;
+}
