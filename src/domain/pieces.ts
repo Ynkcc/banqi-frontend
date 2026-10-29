@@ -1,4 +1,15 @@
+// 棋子域逻辑已收敛到共享模块 src/shared/domain/pieces.ts（Vue/React 双入口共用）。
+// 本文件保留 re-export，消费方 import 路径不变；Vue 侧特有的辅助导出留在本文件。
+
 import type { Slot } from '../api/types';
+
+export {
+  PIECE_META,
+  TYPE_BY_ABBR,
+  slotPlayer,
+  pieceText,
+  coordText,
+} from '../shared/domain/pieces';
 
 export const PIECE_TYPE_ORDER = [
   'General',
@@ -9,28 +20,6 @@ export const PIECE_TYPE_ORDER = [
   'Cannon',
   'Soldier',
 ] as const;
-
-/** 后端短码（R_Sol / B_Gen …）→ 全名（dead_pieces / PIECE_TYPE_ORDER 使用） */
-const SHORT_TO_TYPE: Record<string, string> = {
-  Sol: 'Soldier',
-  Can: 'Cannon',
-  Hor: 'Horse',
-  Cha: 'Chariot',
-  Ele: 'Elephant',
-  Adv: 'Advisor',
-  Gen: 'General',
-};
-
-/** 全名 → 红黑文字 */
-export const PIECE_META: Record<string, { red: string; black: string }> = {
-  General: { red: '帥', black: '將' },
-  Advisor: { red: '仕', black: '士' },
-  Elephant: { red: '相', black: '象' },
-  Chariot: { red: '車', black: '車' },
-  Horse: { red: '馬', black: '馬' },
-  Cannon: { red: '炮', black: '砲' },
-  Soldier: { red: '兵', black: '卒' },
-};
 
 export const BITBOARD_ORDER: { key: string; label: string }[] = [
   { key: 'hidden', label: 'Hidden (暗子)' },
@@ -55,22 +44,6 @@ export const BITBOARD_ORDER: { key: string; label: string }[] = [
 
 export function isRevealed(slot: Slot): boolean {
   return slot !== 'Empty' && slot !== 'Hidden';
-}
-
-export function slotPlayer(slot: Slot): 'Red' | 'Black' | null {
-  if (slot.startsWith('R_')) return 'Red';
-  if (slot.startsWith('B_')) return 'Black';
-  return null;
-}
-
-export function pieceText(slot: Slot): string {
-  if (slot === 'Empty') return '';
-  if (slot === 'Hidden') return '?';
-  const player = slotPlayer(slot);
-  const type = SHORT_TO_TYPE[slot.substring(2)];
-  const meta = type ? PIECE_META[type] : undefined;
-  if (!meta) return '';
-  return player === 'Red' ? meta.red : meta.black;
 }
 
 export function countByType(names: string[] | undefined): Record<string, number> {

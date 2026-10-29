@@ -1,42 +1,8 @@
-// 动作索引 → (from, to) 表（与 banqi-core env/actions.rs 构建顺序对齐：
-// 翻棋单格 → 四邻移动 → 同行长距 → 同列长距）。前端用于策略热力落格。
-export function actionToCoords(rows: number, cols: number): [number, number][] {
-  const n = rows * cols
-  const out: [number, number][] = []
-  for (let sq = 0; sq < n; sq++) out.push([sq, sq])
-  const dirs: [number, number][] = [
-    [-1, 0],
-    [1, 0],
-    [0, -1],
-    [0, 1],
-  ]
-  for (let r1 = 0; r1 < rows; r1++) {
-    for (let c1 = 0; c1 < cols; c1++) {
-      const from = r1 * cols + c1
-      for (const [dr, dc] of dirs) {
-        const r2 = r1 + dr
-        const c2 = c1 + dc
-        if (r2 >= 0 && r2 < rows && c2 >= 0 && c2 < cols) {
-          out.push([from, r2 * cols + c2])
-        }
-      }
-    }
-  }
-  for (let r1 = 0; r1 < rows; r1++) {
-    for (let c1 = 0; c1 < cols; c1++) {
-      const from = r1 * cols + c1
-      for (let c2 = 0; c2 < cols; c2++) {
-        if (Math.abs(c1 - c2) > 1) out.push([from, r1 * cols + c2])
-      }
-      for (let r2 = 0; r2 < rows; r2++) {
-        if (Math.abs(r1 - r2) > 1) out.push([from, r2 * cols + c1])
-      }
-    }
-  }
-  return out
-}
+// 动作索引 → 坐标逻辑已收敛到共享模块 src/shared/domain/actions.ts（与 banqi-core
+// env/actions.rs 构建顺序对齐）。本文件保留 re-export 与 React 侧特有的展示组件。
+export { actionToCoords } from '../../shared/domain/actions'
 
-// Sparkline 内联折线图（自适应归一化）。
+// Sparkline 内联折线图（自适应归一化）——React 特有，留在本侧。
 export function Sparkline({
   values,
   color,
