@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "generate:api": "cd ../banqi-server && cargo test -p bqsrv-dto -p bqsrv-app export_bindings",
+    "prebuild": "npm run generate:api",
     "build": "vue-tsc --noEmit && tsc -p src/scheduler --noEmit && vite build",
+    "pretypecheck": "npm run generate:api",
     "typecheck": "vue-tsc --noEmit && tsc -p src/scheduler --noEmit",
     "preview": "vite preview"
   },

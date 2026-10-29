@@ -1,6 +1,6 @@
 import { computed, reactive, watch } from 'vue';
 import { api } from '../api/client';
-import type { GameState, HistoryMove, OpeningScenarioCfg, Slot, SlotCfg, SlotsCfg, SlotKind, Suggestion, Variant } from '../api/types';
+import type { GameState, HistoryMove, OpeningScenarioCfg, Slot, SlotCfg, SlotsCfg, SlotKind, StepResult, Suggestion, Variant } from '../api/types';
 import { variantMaxConsecutive } from '../domain/variants';
 import { appendLog } from './useLogs';
 import { useToast } from './useToast';
@@ -18,7 +18,7 @@ interface GameStore {
   busy: boolean;
   selectedSquare: number | null;
   moveHighlights: Map<number, MoveHighlight>;
-  lastResult: { terminated: boolean; truncated: boolean; winner: number } | null;
+  lastResult: StepResult | null;
   /** 是否可悔棋（由后端 can_undo 契约显式维护，随每次状态同步更新） */
   canUndo: boolean;
   /** 决策历史面板当前选中查看的手数（null = 未选中；选中时棋盘高亮 from/to） */
@@ -157,7 +157,7 @@ async function refreshHighlights() {
       : new Map();
 }
 
-function checkGameOver(result: { terminated: boolean; truncated: boolean; winner: number }) {
+function checkGameOver(result: Pick<StepResult, 'terminated' | 'truncated' | 'winner'>) {
   if (!result.terminated && !result.truncated) return;
   const outcome =
     result.winner === 1 ? '红方获胜！' : result.winner === -1 ? '黑方获胜！' : '平局！';
@@ -167,7 +167,7 @@ function checkGameOver(result: { terminated: boolean; truncated: boolean; winner
   toast.success(msg, 5000);
 }
 
-async function applyStep(prev: GameState, result: { state: GameState } & { terminated: boolean; truncated: boolean; winner: number }) {
+async function applyStep(prev: GameState, result: StepResult) {
   store.lastResult = result;
   logNewMoves(prev, result.state);
   store.state = result.state;

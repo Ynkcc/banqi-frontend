@@ -45,7 +45,7 @@ watch(
   { deep: true },
 );
 
-const capabilities = reactive<Capabilities>({ torch: false, onnx: false });
+const capabilities = reactive<Capabilities>({ torch: false, onnx: false, nnue: false });
 const ptModels = ref<ModelEntry[]>([]);
 const nnueModels = ref<ModelEntry[]>([]);
 const modelsLoading = ref(false);

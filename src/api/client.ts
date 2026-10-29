@@ -11,6 +11,7 @@
 import type {
   AgentParamsCfg,
   AgentView,
+  ApiErrorCode,
   ArchivedGameDetail,
   ArchivedGameSummary,
   Capabilities,
@@ -55,9 +56,12 @@ interface MoveActionResp {
 }
 
 class RestError extends Error {
-  constructor(message: string) {
+  /** 服务器 machine-readable 错误码（error.code；无法解析时缺省）。 */
+  readonly code?: ApiErrorCode;
+  constructor(message: string, code?: ApiErrorCode) {
     super(message);
     this.name = 'RestError';
+    this.code = code;
   }
 }
 
@@ -69,14 +73,16 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!resp.ok) {
     let detail = `${resp.status} ${resp.statusText}`;
+    let code: ApiErrorCode | undefined;
     try {
       const body = await resp.json();
       // server 错误体: { error: { code, message } }
       detail = body?.error?.message ?? body?.error ?? detail;
+      if (typeof body?.error?.code === 'string') code = body.error.code;
     } catch {
       /* 非 JSON 错误体，保留状态行 */
     }
-    throw new RestError(detail);
+    throw new RestError(detail, code);
   }
   if (resp.status === 204) return undefined as T;
   return resp.json() as Promise<T>;
@@ -96,9 +102,10 @@ let lastSlots: SlotsCfg = { red: { kind: 'Human' }, black: { kind: 'Human' } };
 /** 由状态响应记录当前槽位配置（粘贴重建等场景沿用）。 */
 function recordSlotsFromState(state: { slots?: SlotsView }): void {
   if (!state.slots) return;
+  // 生成契约中 kind 为 string；此处收窄回前端领域类型 SlotKind
   lastSlots = {
-    red: { kind: state.slots.red.kind, model_file: state.slots.red.model_file },
-    black: { kind: state.slots.black.kind, model_file: state.slots.black.model_file },
+    red: { kind: state.slots.red.kind as SlotCfg['kind'], model_file: state.slots.red.model_file },
+    black: { kind: state.slots.black.kind as SlotCfg['kind'], model_file: state.slots.black.model_file },
   };
 }
 

@@ -1,2 +1,5 @@
 node_modules/
 dist/
+# ts-rs 生成物（不入库）：由 banqi-server `cargo test export_bindings` 产出，
+# 前端 build/typecheck 前经 `npm run generate:api` 自动生成（见 package.json）
+src/api/generated/
