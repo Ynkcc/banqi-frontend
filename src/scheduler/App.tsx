@@ -2,7 +2,6 @@ import { Layout, Menu } from 'antd'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Episodes from './pages/Episodes'
 import Generation from './pages/Generation'
-import Eval from './pages/Eval'
 import Matches from './pages/Matches'
 import Networks from './pages/Networks'
 import Overview from './pages/Overview'
@@ -15,7 +14,6 @@ const menuItems = [
   { key: '/', label: <Link to="/">总览</Link> },
   { key: '/networks', label: <Link to="/networks">网络</Link> },
   { key: '/matches', label: <Link to="/matches">对战 / SPRT</Link> },
-  { key: '/eval', label: <Link to="/eval">绝对强度</Link> },
   { key: '/train-config', label: <Link to="/train-config">训练超参</Link> },
   { key: '/storage', label: <Link to="/storage">存储</Link> },
   { key: '/workers', label: <Link to="/workers">Worker</Link> },
@@ -40,7 +38,6 @@ export default function App() {
             <Route path="/" element={<Overview />} />
             <Route path="/networks" element={<Networks />} />
             <Route path="/matches" element={<Matches />} />
-            <Route path="/eval" element={<Eval />} />
             <Route path="/train-config" element={<TrainConfig />} />
             <Route path="/storage" element={<Storage />} />
             <Route path="/workers" element={<Workers />} />

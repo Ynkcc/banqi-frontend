@@ -163,7 +163,7 @@ export default function Overview() {
             <>
               生成-消费平衡（balance）判定训练侧已停止消费：{data.autoPauseReason}
               <br />
-              任务派发暂停中（eval 不受影响）；trainer 恢复消费后自动解除。详情见下方「Trainer 消费」。
+              任务派发暂停中；trainer 恢复消费后自动解除。详情见下方「Trainer 消费」。
             </>
           }
         />

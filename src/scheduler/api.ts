@@ -2,9 +2,6 @@ import type {
   DataKind,
   DataStats,
   EpisodePage,
-  EvalConfigUpdate,
-  EvalConfigView,
-  EvalView,
   Match,
   Network,
   ReplayGame,
@@ -41,16 +38,6 @@ export const api = {
   networks: () => request<Network[]>('/api/networks'),
   promote: (sha: string) => request<{ ok: boolean }>(`/api/networks/${sha}/promote`, { method: 'POST' }),
   matches: () => request<Match[]>('/api/matches'),
-  eval: () => request<EvalView>('/api/eval'),
-  evalConfig: () => request<EvalConfigView>('/api/eval-config'),
-  setEvalConfig: (body: EvalConfigUpdate) =>
-    request<{ ok: boolean }>('/api/eval-config', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }),
-  triggerEval: () =>
-    request<{ ok: boolean; triggered: number; message: string }>('/api/eval/trigger', { method: 'POST' }),
   workers: () => request<WorkerInfo[]>('/api/workers'),
   trainers: () => request<TrainersView>('/api/trainers'),
   setWorkerNote: (id: string, note: string) =>

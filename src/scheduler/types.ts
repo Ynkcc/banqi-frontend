@@ -5,7 +5,6 @@ export interface Counts {
   episodes: number
   episodeGames: number
   workers: number
-  evalResults: number
 }
 
 export interface Network {
@@ -36,97 +35,12 @@ export interface Status {
   sprt: Sprt
   best: Network | null
   counts: Counts
-  eval: EvalConfig
-  /** 绝对强度判据置位的停机信号（trainer 轮询 GetInfo 后优雅停止） */
+  /** 停机信号（trainer 轮询 GetInfo 后优雅停止） */
   shouldStop: boolean
   stopReason: string
   /** 生成-消费平衡的自动暂停（trainer 消费停滞时由 balance 策略置位） */
   autoPaused: boolean
   autoPauseReason: string
-}
-
-/** 绝对强度评估配置快照（opponents/stopWinRate 恒为当前生效值：在线覆盖优先于配置文件） */
-export interface EvalConfig {
-  enabled: boolean
-  opponents: string[]
-  games: number
-  mctsSims: number
-  mode: string
-  everyNPromotions: number
-  noProgressN: number
-  noProgressEps: number
-  /** 达标停机：material_expectimax 胜率 ≥ 该值即置位 should_stop；0 = 关闭 */
-  stopWinRate: number
-  /** 待下发评估任务数 */
-  pending: number
-}
-
-/** GET /api/eval-config 响应：在线覆盖 + 生效值 */
-export interface EvalConfigView {
-  override: {
-    enabled?: boolean
-    opponents?: string[]
-    stopWinRate?: number
-  } | null
-  effective: {
-    enabled: boolean
-    opponents: string[]
-    stopWinRate: number
-  }
-}
-
-/** PUT /api/eval-config 请求体：null = 该项回落配置文件值；clear = 全清 */
-export interface EvalConfigUpdate {
-  clear?: boolean
-  enabled?: boolean | null
-  opponents?: string[] | null
-  stopWinRate?: number | null
-}
-
-/** 单次评估结果（被测网络 × 对手标识） */
-export interface EvalResult {
-  networkSha: string
-  opponentSpec: string
-  /** 主网络视角胜负和（聚合，向后兼容） */
-  wins: number
-  draws: number
-  losses: number
-  /** 明细四分：红/黑方获胜（绝对色彩）+ 平局成因拆分；旧数据为 0 */
-  redWins: number
-  blackWins: number
-  drawNoCapture: number
-  drawTruncation: number
-  numGames: number
-  winRate: number
-  avgMoves: number
-  createdAt: number
-}
-
-/** 单对手的版本序列（升序）与「连续无提升」计数 */
-export interface EvalTrend {
-  opponent: string
-  versions: number
-  noProgress: number
-  latestWinRate: number
-  points: EvalResult[]
-}
-
-/** 进行中的评估作业（eval_queue 累计进度 + 在飞局数） */
-export interface EvalRunning {
-  networkSha: string
-  spec: string
-  numGames: number
-  targetGames: number
-  inFlight: number
-}
-
-export interface EvalView {
-  config: EvalConfig
-  shouldStop: boolean
-  stopReason: string
-  latest: EvalResult[]
-  trends: EvalTrend[]
-  running: EvalRunning[]
 }
 
 export interface Match {
@@ -369,7 +283,7 @@ export interface RunningTask {
   matchId: number
   networkSha: string
   opponentSha: string
-  /** eval 任务的对手标识（rule:capture_first 等）；其余任务为空 */
+  /** 评估/对打任务的对手标识（rule:capture_first 等）；其余任务为空 */
   opponentSpec: string
   games: number
   createdAt: number
