@@ -396,7 +396,7 @@ export default function CollectJobs() {
             <Space size={8}>
               <Tag color="success">completed {tstats.data.counts.completed}</Tag>
               <Tag color="default">expired {tstats.data.counts.expired}</Tag>
-              <Typography.Text type="secondary">5s 刷新</Typography>
+              <Typography.Text type="secondary">5s 刷新</Typography.Text>
             </Space>
           ) : null
         }
