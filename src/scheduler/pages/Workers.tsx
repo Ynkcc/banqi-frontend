@@ -53,7 +53,15 @@ export default function Workers() {
     if (!t) return <Typography.Text type="secondary">-</Typography.Text>
     const kind = t.kind.replace('TASK_', '')
     const color =
-      kind === 'RATING' ? 'gold' : kind === 'SELFPLAY' ? 'blue' : kind === 'REANALYSIS' ? 'cyan' : 'purple'
+      kind === 'RATING'
+        ? 'gold'
+        : kind === 'COLLECT'
+          ? 'magenta'
+          : kind === 'SELFPLAY'
+            ? 'blue'
+            : kind === 'REANALYSIS'
+              ? 'cyan'
+              : 'purple'
     return (
       <Space size={4}>
         <Tag color={color}>{kind}</Tag>

@@ -33,7 +33,11 @@ const taskColumns: TableProps<RunningTask>['columns'] = [
   {
     title: '类型',
     dataIndex: 'kind',
-    render: (v: string) => <Tag color={v === 'TASK_RATING' ? 'gold' : 'blue'}>{v.replace('TASK_', '')}</Tag>,
+    render: (v: string) => (
+      <Tag color={v === 'TASK_RATING' ? 'gold' : v === 'TASK_COLLECT' ? 'magenta' : v === 'TASK_REANALYSIS' ? 'cyan' : 'blue'}>
+        {v.replace('TASK_', '')}
+      </Tag>
+    ),
   },
   { title: 'Worker', dataIndex: 'workerId' },
   { title: '网络', dataIndex: 'networkSha', render: (v: string) => <Typography.Text code>{shortSha(v)}</Typography.Text> },

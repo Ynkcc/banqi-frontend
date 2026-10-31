@@ -9,9 +9,11 @@ import Replay from './pages/Replay'
 import Storage from './pages/Storage'
 import TrainConfig from './pages/TrainConfig'
 import Workers from './pages/Workers'
+import CollectJobs from './pages/CollectJobs'
 
 const menuItems = [
   { key: '/', label: <Link to="/">总览</Link> },
+  { key: '/collect', label: <Link to="/collect">Collect 任务</Link> },
   { key: '/networks', label: <Link to="/networks">网络</Link> },
   { key: '/matches', label: <Link to="/matches">对战 / SPRT</Link> },
   { key: '/train-config', label: <Link to="/train-config">训练超参</Link> },
@@ -36,6 +38,7 @@ export default function App() {
         <Layout.Content style={{ padding: 24 }}>
           <Routes>
             <Route path="/" element={<Overview />} />
+            <Route path="/collect" element={<CollectJobs />} />
             <Route path="/networks" element={<Networks />} />
             <Route path="/matches" element={<Matches />} />
             <Route path="/train-config" element={<TrainConfig />} />

@@ -2,6 +2,8 @@ import type {
   DataKind,
   DataStats,
   EpisodePage,
+  JobControlView,
+  JobView,
   Match,
   Network,
   ReplayGame,
@@ -48,6 +50,15 @@ export const api = {
     }),
   tasks: () => request<RunningTask[]>('/api/tasks'),
   taskStats: () => request<TaskStateStats>('/api/task-stats'),
+  jobs: (kind?: string, state?: string) => {
+    const q = new URLSearchParams()
+    if (kind) q.set('kind', kind)
+    if (state) q.set('state', state)
+    const qs = q.toString()
+    return request<{ jobs: JobView[] }>(`/api/jobs${qs ? `?${qs}` : ''}`)
+  },
+  controlJob: (jobId: string, action: 'pause' | 'resume' | 'cancel') =>
+    request<JobControlView>(`/api/jobs/${encodeURIComponent(jobId)}/${action}`, { method: 'POST' }),
   episodes: (before: number, limit = 100) =>
     request<EpisodePage>(`/api/episodes?before=${before}&limit=${limit}`),
   replayGames: (id: number | string) =>

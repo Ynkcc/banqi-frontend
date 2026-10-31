@@ -287,6 +287,60 @@ export interface RunningTask {
   opponentSpec: string
   games: number
   createdAt: number
+  /** 所属 job（collect/selfplay/rating 派发来源）；旧调度器为空 */
+  jobId?: string
+}
+
+/** —— collect/selfplay/rating job（/api/jobs）—— */
+
+/** 对弈一方规格（与调度器 PlayerSpecJson 对应） */
+export interface PlayerSpec {
+  kind: string
+  networkSha: string
+  search?: unknown
+}
+
+/** 种子策略（kind: fixed/random/incremental/range） */
+export interface SeedStrategyBody {
+  kind: string
+  fixedSeed: number
+  baseSeed: number
+  minSeed: number
+  maxSeed: number
+}
+
+/** collect job 规格（调度器 CollectBody 回显，camelCase） */
+export interface CollectSpecBody {
+  variant: string
+  scenario: string
+  seedStrategy: SeedStrategyBody
+  playerA: PlayerSpec
+  playerB: PlayerSpec
+  dataKind: string
+  totalGames: number
+  pairsParallel?: boolean
+  pairSeedRefresh?: boolean
+}
+
+/** /api/jobs 列表项（spec 按 kind 解析：collect → CollectSpecBody） */
+export interface JobView {
+  jobId: string
+  kind: 'collect' | 'selfplay' | 'rating' | string
+  priority: number
+  state: 'running' | 'paused' | 'completed' | 'cancelled' | string
+  totalGames: number
+  completedGames: number
+  dispatchedGames: number
+  createdAt: number
+  updatedAt: number
+  spec: CollectSpecBody | Record<string, unknown> | null
+  ratingStats?: Record<string, unknown>
+}
+
+export interface JobControlView {
+  accepted: boolean
+  message: string
+  state: string
 }
 
 /** [balance] 配置快照（生成-消费平衡策略） */
