@@ -13,7 +13,7 @@ import {
   Typography,
 } from 'antd'
 import type { TableProps } from 'antd'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { fmtAgo, fmtCount, fmtTime, kindTagColor, shortSha } from '../format'
 import type { CollectSpecBody, Episode, JobView, PlayerSpec, RunningTask, TaskStateStats } from '../types'
@@ -59,8 +59,18 @@ const playerCell = (p?: PlayerSpec) => {
 
 export default function CollectJobs() {
   const { message } = App.useApp()
-  // collect job 清单（持久化，含 running/paused/completed/cancelled 全状态）
-  const jobs = usePoll(() => api.jobs('collect'), 5000)
+  // collect job 清单（持久化，含 running/paused/completed/cancelled 全状态；服务端分页）
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const jobs = usePoll(
+    () => api.jobs('collect', undefined, { limit: pageSize, offset: (page - 1) * pageSize }),
+    5000,
+  )
+  // 翻页 / 调整页大小后立即刷新（reload 稳定引用，轮询继续走新参数）
+  useEffect(() => {
+    void jobs.reload()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize])
   // worker 领取的在途任务（进程内，assigned 态）
   const tasks = usePoll(api.tasks, 5000)
   // 任务状态机快照（completed/expired 计数 + 最近过期明细）
@@ -336,15 +346,25 @@ export default function CollectJobs() {
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Card
         size="small"
-        title={`Collect 任务（${jobs.data?.jobs.length ?? 0}）`}
-        extra={<Typography.Text type="secondary">5s 刷新 · 含运行中/暂停/已完成/已取消</Typography.Text>}
+        title={`Collect 任务（共 ${jobs.data?.total ?? 0} 条）`}
+        extra={<Typography.Text type="secondary">5s 刷新 · 含运行中/暂停/已完成/已取消 · 服务端分页</Typography.Text>}
       >
         <Table<JobView>
           rowKey="jobId"
           size="small"
           columns={jobColumns}
           dataSource={jobs.data?.jobs ?? []}
-          pagination={false}
+          pagination={{
+            current: page,
+            pageSize,
+            total: jobs.data?.total ?? 0,
+            showSizeChanger: true,
+            showTotal: (t) => `共 ${t} 条`,
+            onChange: (p, ps) => {
+              setPage(p)
+              setPageSize(ps)
+            },
+          }}
           scroll={{ x: 'max-content' }}
           locale={{ emptyText: '尚无 collect job（可通过 POST /api/jobs 提交）' }}
           expandable={{

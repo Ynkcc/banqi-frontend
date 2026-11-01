@@ -337,6 +337,14 @@ export interface JobView {
   ratingStats?: Record<string, unknown>
 }
 
+/** /api/jobs 分页响应（total 为满足过滤条件的总条数，不受 limit/offset 影响） */
+export interface JobListPage {
+  jobs: JobView[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export interface JobControlView {
   accepted: boolean
   message: string

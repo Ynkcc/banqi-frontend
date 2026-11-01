@@ -3,6 +3,7 @@ import type {
   DataStats,
   EpisodePage,
   JobControlView,
+  JobListPage,
   JobView,
   Match,
   Network,
@@ -38,6 +39,18 @@ function readError(body: string): string | undefined {
 export const api = {
   status: () => request<Status>('/api/status'),
   networks: () => request<Network[]>('/api/networks'),
+  registerNetwork: (body: {
+    sha: string
+    parentSha?: string
+    notes?: string
+    format?: string
+    skipMatch?: boolean
+  }) =>
+    request<{ accepted: boolean; message: string; matchTaskHint?: string }>('/api/networks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
   promote: (sha: string) => request<{ ok: boolean }>(`/api/networks/${sha}/promote`, { method: 'POST' }),
   matches: () => request<Match[]>('/api/matches'),
   workers: () => request<WorkerInfo[]>('/api/workers'),
@@ -50,13 +63,21 @@ export const api = {
     }),
   tasks: () => request<RunningTask[]>('/api/tasks'),
   taskStats: () => request<TaskStateStats>('/api/task-stats'),
-  jobs: (kind?: string, state?: string) => {
+  jobs: (
+    kind?: string,
+    state?: string,
+    opts?: { jobId?: string; limit?: number; offset?: number },
+  ) => {
     const q = new URLSearchParams()
     if (kind) q.set('kind', kind)
     if (state) q.set('state', state)
+    if (opts?.jobId) q.set('jobId', opts.jobId)
+    if (opts?.limit !== undefined) q.set('limit', String(opts.limit))
+    if (opts?.offset !== undefined) q.set('offset', String(opts.offset))
     const qs = q.toString()
-    return request<{ jobs: JobView[] }>(`/api/jobs${qs ? `?${qs}` : ''}`)
+    return request<JobListPage>(`/api/jobs${qs ? `?${qs}` : ''}`)
   },
+  job: (jobId: string) => request<JobView>(`/api/jobs/${encodeURIComponent(jobId)}`),
   controlJob: (jobId: string, action: 'pause' | 'resume' | 'cancel') =>
     request<JobControlView>(`/api/jobs/${encodeURIComponent(jobId)}/${action}`, { method: 'POST' }),
   episodes: (before: number, limit = 100) =>
