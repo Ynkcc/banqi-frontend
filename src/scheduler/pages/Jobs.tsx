@@ -6,6 +6,8 @@ import {
   Descriptions,
   Modal,
   Progress,
+  Segmented,
+  Select,
   Space,
   Table,
   Tag,
@@ -16,10 +18,22 @@ import type { TableProps } from 'antd'
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { fmtAgo, fmtCount, fmtTime, kindTagColor, shortSha } from '../format'
-import type { CollectSpecBody, Episode, JobView, PlayerSpec, RunningTask, TaskStateStats } from '../types'
+import type {
+  CollectSpecBody,
+  Episode,
+  JobView,
+  PlayerSpec,
+  RatingSpecBody,
+  RunningTask,
+  TaskStateStats,
+} from '../types'
 import { usePoll } from '../usePoll'
+import CreateJobModal from '../components/CreateJobModal'
 
 const EPISODE_LIMIT = 20
+
+const JOB_KINDS = ['all', 'collect', 'rating'] as const
+const JOB_STATES = ['all', 'running', 'paused', 'completed', 'cancelled'] as const
 
 const stateTag = (state: string) => {
   const color =
@@ -35,9 +49,18 @@ const stateTag = (state: string) => {
   return <Tag color={color}>{state}</Tag>
 }
 
+const kindTag = (kind: string) => (
+  <Tag color={kind === 'rating' ? 'gold' : kind === 'collect' ? 'blue' : 'default'}>{kind}</Tag>
+)
+
 const specOf = (job: JobView): CollectSpecBody | null =>
   job.kind === 'collect' && job.spec && typeof job.spec === 'object'
     ? (job.spec as CollectSpecBody)
+    : null
+
+const ratingSpecOf = (job: JobView): RatingSpecBody | null =>
+  job.kind === 'rating' && job.spec && typeof job.spec === 'object'
+    ? (job.spec as RatingSpecBody)
     : null
 
 const seedKindText: Record<string, string> = {
@@ -57,30 +80,40 @@ const playerCell = (p?: PlayerSpec) => {
   )
 }
 
-export default function CollectJobs() {
+export default function Jobs() {
   const { message } = App.useApp()
-  // collect job 清单（持久化，含 running/paused/completed/cancelled 全状态；服务端分页）
+
+  // —— 任务列表（持久化 job，全 kind/全状态；服务端分页）——
+  const [kindFilter, setKindFilter] = useState<(typeof JOB_KINDS)[number]>('all')
+  const [stateFilter, setStateFilter] = useState<(typeof JOB_STATES)[number]>('all')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const jobs = usePoll(
-    () => api.jobs('collect', undefined, { limit: pageSize, offset: (page - 1) * pageSize }),
+    () =>
+      api.jobs(
+        kindFilter === 'all' ? undefined : kindFilter,
+        stateFilter === 'all' ? undefined : stateFilter,
+        { limit: pageSize, offset: (page - 1) * pageSize },
+      ),
     5000,
   )
-  // 翻页 / 调整页大小后立即刷新（reload 稳定引用，轮询继续走新参数）
+  // 翻页 / 筛选 / 页大小变化后立即刷新（reload 稳定引用，轮询继续走新参数）
   useEffect(() => {
     void jobs.reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize])
-  // worker 领取的在途任务（进程内，assigned 态）
+  }, [page, pageSize, kindFilter, stateFilter])
+
+  // —— 任务状态展示相关轮询 ——
+  // worker 领取的在途任务（进程内 assigned 态）
   const tasks = usePoll(api.tasks, 5000)
   // 任务状态机快照（completed/expired 计数 + 最近过期明细）
   const tstats = usePoll(api.taskStats, 5000)
-  // 最近登记的对局批：collect 任务完成上报的直接产物
+  // 最近登记的对局批：任务完成上报的直接产物
   const episodes = usePoll(() => api.episodes(0, EPISODE_LIMIT), 10000)
 
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
 
-  const collectTasks = (tasks.data ?? []).filter((t) => t.kind === 'TASK_COLLECT')
   const jobById = new Map((jobs.data?.jobs ?? []).map((j) => [j.jobId, j]))
 
   const report = (e: unknown) => message.error(`操作失败：${e instanceof Error ? e.message : String(e)}`)
@@ -126,6 +159,7 @@ export default function CollectJobs() {
         </Tooltip>
       ),
     },
+    { title: '类型', dataIndex: 'kind', width: 90, render: (v: string) => kindTag(v) },
     { title: '状态', dataIndex: 'state', width: 110, render: (v: string) => stateTag(v) },
     {
       title: '进度（局）',
@@ -144,9 +178,9 @@ export default function CollectJobs() {
             </Tooltip>
           )
         }
-        // totalGames = 0：持续型采集（不收敛）
+        // totalGames = 0：持续型任务（rating 仅 SPRT 判停）
         return (
-          <Tooltip title={`持续型 job（无上限）：已下发 ${fmtCount(j.dispatchedGames)}，已完成 ${fmtCount(j.completedGames)}`}>
+          <Tooltip title={`无局数上限：已下发 ${fmtCount(j.dispatchedGames)}，已完成 ${fmtCount(j.completedGames)}`}>
             <span>
               {fmtCount(j.completedGames)} <Typography.Text type="secondary">/ 持续</Typography.Text>
             </span>
@@ -159,14 +193,33 @@ export default function CollectJobs() {
       key: 'players',
       render: (_, j: JobView) => {
         const spec = specOf(j)
-        if (!spec) return <Typography.Text type="secondary">-</Typography.Text>
-        return (
-          <Space size={4} wrap>
-            {playerCell(spec.playerA)}
-            <Typography.Text type="secondary">vs</Typography.Text>
-            {playerCell(spec.playerB)}
-          </Space>
-        )
+        if (spec) {
+          return (
+            <Space size={4} wrap>
+              {playerCell(spec.playerA)}
+              <Typography.Text type="secondary">vs</Typography.Text>
+              {playerCell(spec.playerB)}
+            </Space>
+          )
+        }
+        const rs = ratingSpecOf(j)
+        if (rs) {
+          const stats = j.ratingStats
+          return (
+            <Space size={4} wrap>
+              <Tag color="blue">候选</Tag>
+              <Typography.Text code>{shortSha(rs.candidateSha)}</Typography.Text>
+              <Typography.Text type="secondary">vs</Typography.Text>
+              <Typography.Text code>{shortSha(rs.opponentSha)}</Typography.Text>
+              {stats && (
+                <Typography.Text type="secondary">
+                  {stats.matchStatus} · {fmtCount(stats.numGames)} 局
+                </Typography.Text>
+              )}
+            </Space>
+          )
+        }
+        return <Typography.Text type="secondary">-</Typography.Text>
       },
     },
     {
@@ -181,13 +234,14 @@ export default function CollectJobs() {
     {
       title: '场景',
       key: 'scenario',
-      width: 120,
+      width: 90,
       render: (_, j: JobView) => {
         const spec = specOf(j)
-        if (!spec?.scenario) return '-'
+        const scenario = spec?.scenario ?? ratingSpecOf(j)?.scenario
+        if (!scenario) return '-'
         return (
-          <Tag color={spec.scenario === 'all_revealed' ? 'gold' : 'blue'}>
-            {spec.scenario === 'all_revealed' ? '全明子' : '标准'}
+          <Tag color={scenario === 'all_revealed' ? 'gold' : 'blue'}>
+            {scenario === 'all_revealed' ? '全明子' : '标准'}
           </Tag>
         )
       },
@@ -231,6 +285,7 @@ export default function CollectJobs() {
       title: '操作',
       key: 'actions',
       width: 150,
+      fixed: 'right',
       render: (_, j: JobView) => {
         const busy = busyId === j.jobId
         const terminal = j.state === 'completed' || j.state === 'cancelled'
@@ -267,6 +322,12 @@ export default function CollectJobs() {
           <Typography.Text code>{v.slice(0, 12)}</Typography.Text>
         </Tooltip>
       ),
+    },
+    {
+      title: '类型',
+      dataIndex: 'kind',
+      width: 110,
+      render: (v: string) => <Tag>{v.replace('TASK_', '').toLowerCase()}</Tag>,
     },
     { title: 'Worker', dataIndex: 'workerId', ellipsis: true },
     {
@@ -346,8 +407,36 @@ export default function CollectJobs() {
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Card
         size="small"
-        title={`Collect 任务（共 ${jobs.data?.total ?? 0} 条）`}
-        extra={<Typography.Text type="secondary">5s 刷新 · 含运行中/暂停/已完成/已取消 · 服务端分页</Typography.Text>}
+        title={`任务列表（共 ${jobs.data?.total ?? 0} 条）`}
+        extra={
+          <Space size={8} wrap>
+            <Segmented
+              size="small"
+              value={kindFilter}
+              onChange={(v) => {
+                setKindFilter(v as (typeof JOB_KINDS)[number])
+                setPage(1)
+              }}
+              options={JOB_KINDS.map((k) => ({ value: k, label: k === 'all' ? '全部类型' : k }))}
+            />
+            <Select
+              size="small"
+              style={{ width: 110 }}
+              value={stateFilter}
+              onChange={(v) => {
+                setStateFilter(v)
+                setPage(1)
+              }}
+              options={JOB_STATES.map((s) => ({
+                value: s,
+                label: s === 'all' ? '全部状态' : stateTag(s),
+              }))}
+            />
+            <Button type="primary" size="small" onClick={() => setCreateOpen(true)}>
+              新建任务
+            </Button>
+          </Space>
+        }
       >
         <Table<JobView>
           rowKey="jobId"
@@ -366,45 +455,79 @@ export default function CollectJobs() {
             },
           }}
           scroll={{ x: 'max-content' }}
-          locale={{ emptyText: '尚无 collect job（可通过 POST /api/jobs 提交）' }}
+          locale={{ emptyText: '无符合条件的任务（可点击右上角「新建任务」提交）' }}
           expandable={{
             expandedRowRender: (j) => {
               const spec = specOf(j)
-              if (!spec) return <Typography.Text type="secondary">无规格详情</Typography.Text>
-              return (
-                <Descriptions column={3} size="small" bordered>
-                  <Descriptions.Item label="variant">{spec.variant}</Descriptions.Item>
-                  <Descriptions.Item label="场景">
-                    {spec.scenario === 'all_revealed' ? '全明子（all_revealed）' : '标准（standard）'}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="数据类别">{spec.dataKind}</Descriptions.Item>
-                  <Descriptions.Item label="选手 A">{playerCell(spec.playerA)}</Descriptions.Item>
-                  <Descriptions.Item label="选手 B">{playerCell(spec.playerB)}</Descriptions.Item>
-                  <Descriptions.Item label="种子策略">{seedKindText[spec.seedStrategy?.kind] ?? spec.seedStrategy?.kind}</Descriptions.Item>
-                  <Descriptions.Item label="目标局数">{fmtCount(spec.totalGames)}</Descriptions.Item>
-                  <Descriptions.Item label="成对并行">{spec.pairsParallel ? '是' : '否'}</Descriptions.Item>
-                  <Descriptions.Item label="成对种子刷新">{spec.pairSeedRefresh ? '是' : '否'}</Descriptions.Item>
-                </Descriptions>
-              )
+              if (spec) {
+                return (
+                  <Descriptions column={3} size="small" bordered>
+                    <Descriptions.Item label="variant">{spec.variant}</Descriptions.Item>
+                    <Descriptions.Item label="场景">
+                      {spec.scenario === 'all_revealed' ? '全明子（all_revealed）' : '标准（standard）'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="数据类别">{spec.dataKind}</Descriptions.Item>
+                    <Descriptions.Item label="选手 A">{playerCell(spec.playerA)}</Descriptions.Item>
+                    <Descriptions.Item label="选手 B">{playerCell(spec.playerB)}</Descriptions.Item>
+                    <Descriptions.Item label="种子策略">{seedKindText[spec.seedStrategy?.kind] ?? spec.seedStrategy?.kind}</Descriptions.Item>
+                    <Descriptions.Item label="目标局数">{fmtCount(spec.totalGames)}</Descriptions.Item>
+                    <Descriptions.Item label="成对并行">{spec.pairsParallel ? '是' : '否'}</Descriptions.Item>
+                    <Descriptions.Item label="成对种子刷新">{spec.pairSeedRefresh ? '是' : '否'}</Descriptions.Item>
+                  </Descriptions>
+                )
+              }
+              const rs = ratingSpecOf(j)
+              if (rs) {
+                const stats = j.ratingStats
+                return (
+                  <Descriptions column={3} size="small" bordered>
+                    <Descriptions.Item label="候选网络">
+                      <Typography.Text code copyable={{ text: rs.candidateSha }}>
+                        {shortSha(rs.candidateSha)}
+                      </Typography.Text>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="对手网络">
+                      <Typography.Text code copyable={{ text: rs.opponentSha }}>
+                        {shortSha(rs.opponentSha)}
+                      </Typography.Text>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="目标局数">
+                      {rs.totalGames > 0 ? fmtCount(rs.totalGames) : '仅 SPRT 判停'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="SPRT 参数">
+                      {`elo0=${rs.sprtElo0} · elo1=${rs.sprtElo1} · α=${rs.sprtAlpha} · β=${rs.sprtBeta}`}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Match 状态">{stats?.matchStatus ?? '-'}</Descriptions.Item>
+                    <Descriptions.Item label="双方棋手">
+                      {stats ? `${stats.sideAKind} vs ${stats.sideBKind}` : '-'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="对局统计（对）" span={2}>
+                      {stats ? `LL ${stats.ll} / LD ${stats.ld} / DD ${stats.dd} / WL ${stats.wl} / DW ${stats.dw} / WW ${stats.ww}` : '-'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="已完成局数">{stats ? fmtCount(stats.numGames) : '-'}</Descriptions.Item>
+                  </Descriptions>
+                )
+              }
+              return <Typography.Text type="secondary">无规格详情</Typography.Text>
             },
-            rowExpandable: (j) => !!specOf(j),
+            rowExpandable: (j) => !!specOf(j) || !!ratingSpecOf(j),
           }}
         />
       </Card>
 
       <Card
         size="small"
-        title={`Worker 领取的任务（${collectTasks.length} 在途）`}
+        title={`Worker 在途任务（${tasks.data?.length ?? 0}）`}
         extra={<Typography.Text type="secondary">worker 经 gRPC GetTask 领取、未上报完成的任务</Typography.Text>}
       >
         <Table<RunningTask>
           rowKey="taskId"
           size="small"
           columns={claimedColumns}
-          dataSource={collectTasks}
+          dataSource={tasks.data ?? []}
           pagination={false}
           scroll={{ x: 'max-content' }}
-          locale={{ emptyText: '无在途 collect 任务' }}
+          locale={{ emptyText: '无在途任务' }}
         />
       </Card>
 
@@ -468,6 +591,8 @@ export default function CollectJobs() {
           )}
         />
       </Card>
+
+      <CreateJobModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={() => void jobs.reload()} />
     </Space>
   )
 }

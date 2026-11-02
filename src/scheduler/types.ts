@@ -317,7 +317,36 @@ export interface CollectSpecBody {
   pairSeedRefresh?: boolean
 }
 
-/** /api/jobs 列表项（spec 按 kind 解析：collect → CollectSpecBody） */
+/** rating job 规格（调度器 RatingBody 回显，camelCase） */
+export interface RatingSpecBody {
+  variant: string
+  candidateSha: string
+  opponentSha: string
+  totalGames: number
+  sprtElo0: number
+  sprtElo1: number
+  sprtAlpha: number
+  sprtBeta: number
+  sideA?: PlayerSpec | null
+  sideB?: PlayerSpec | null
+  scenario: string
+}
+
+/** rating job 附带的 SPRT / 对战统计（调度器 RatingStatsView，camelCase） */
+export interface RatingStats {
+  ll: number
+  ld: number
+  dd: number
+  wl: number
+  dw: number
+  ww: number
+  numGames: number
+  matchStatus: string
+  sideAKind: string
+  sideBKind: string
+}
+
+/** /api/jobs 列表项（spec 按 kind 解析：collect → CollectSpecBody，rating → RatingSpecBody） */
 export interface JobView {
   jobId: string
   kind: 'collect' | 'selfplay' | 'rating' | string
@@ -328,8 +357,8 @@ export interface JobView {
   dispatchedGames: number
   createdAt: number
   updatedAt: number
-  spec: CollectSpecBody | Record<string, unknown> | null
-  ratingStats?: Record<string, unknown>
+  spec: CollectSpecBody | RatingSpecBody | Record<string, unknown> | null
+  ratingStats?: RatingStats | null
 }
 
 /** /api/jobs 分页响应（total 为满足过滤条件的总条数，不受 limit/offset 影响） */
@@ -344,5 +373,12 @@ export interface JobControlView {
   accepted: boolean
   message: string
   state: string
+}
+
+/** POST /api/jobs 响应 */
+export interface SubmitJobResult {
+  accepted: boolean
+  message: string
+  jobId: string
 }
 

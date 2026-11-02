@@ -1,4 +1,5 @@
 import type {
+  CollectSpecBody,
   DataKind,
   DataStats,
   EpisodePage,
@@ -7,11 +8,13 @@ import type {
   JobView,
   Match,
   Network,
+  RatingSpecBody,
   ReplayGame,
   ReplayList,
   RunningTask,
   Status,
   StorageView,
+  SubmitJobResult,
   TaskStateStats,
   TrainConfigView,
   WorkerInfo,
@@ -76,6 +79,19 @@ export const api = {
     return request<JobListPage>(`/api/jobs${qs ? `?${qs}` : ''}`)
   },
   job: (jobId: string) => request<JobView>(`/api/jobs/${encodeURIComponent(jobId)}`),
+  /** 提交任务（kind=collect 带 collect 规格 / kind=rating 带 rating 规格） */
+  submitJob: (body: {
+    kind: 'collect' | 'rating'
+    priority?: number
+    requester?: string
+    collect?: CollectSpecBody
+    rating?: RatingSpecBody
+  }) =>
+    request<SubmitJobResult>('/api/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
   controlJob: (jobId: string, action: 'pause' | 'resume' | 'cancel') =>
     request<JobControlView>(`/api/jobs/${encodeURIComponent(jobId)}/${action}`, { method: 'POST' }),
   episodes: (before: number, limit = 100) =>

@@ -2,6 +2,7 @@ import { Layout, Menu } from 'antd'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Episodes from './pages/Episodes'
 import Generation from './pages/Generation'
+import Jobs from './pages/Jobs'
 import Matches from './pages/Matches'
 import Networks from './pages/Networks'
 import Overview from './pages/Overview'
@@ -9,11 +10,10 @@ import Replay from './pages/Replay'
 import Storage from './pages/Storage'
 import TrainConfig from './pages/TrainConfig'
 import Workers from './pages/Workers'
-import CollectJobs from './pages/CollectJobs'
 
 const menuItems = [
   { key: '/', label: <Link to="/">总览</Link> },
-  { key: '/collect', label: <Link to="/collect">Collect 任务</Link> },
+  { key: '/jobs', label: <Link to="/jobs">任务管理</Link> },
   { key: '/networks', label: <Link to="/networks">网络</Link> },
   { key: '/matches', label: <Link to="/matches">对战 / SPRT</Link> },
   { key: '/train-config', label: <Link to="/train-config">训练超参</Link> },
@@ -38,7 +38,8 @@ export default function App() {
         <Layout.Content style={{ padding: 24 }}>
           <Routes>
             <Route path="/" element={<Overview />} />
-            <Route path="/collect" element={<CollectJobs />} />
+            <Route path="/jobs" element={<Jobs />} />
+            <Route path="/collect" element={<Navigate to="/jobs" replace />} />
             <Route path="/networks" element={<Networks />} />
             <Route path="/matches" element={<Matches />} />
             <Route path="/train-config" element={<TrainConfig />} />
