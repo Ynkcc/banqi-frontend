@@ -141,12 +141,45 @@ export interface Episode {
   drawNoCapture: number
   drawTruncation: number
   createdAt: number
+  /** 任务下发的基础种子（未上报为 null） */
+  seedBase?: number | null
+  /** 配对语义快照：成对并行（未上报为 null） */
+  pairsParallel?: boolean | null
+  /** 配对语义快照：对内第二局是否刷新种子（未上报为 null） */
+  pairSeedRefresh?: boolean | null
 }
 
 export interface EpisodePage {
   items: Episode[]
   nextBefore: number
   hasMore: boolean
+}
+
+/** 逐局标识（/api/episodes/{id}/games）：对局反查与配对关联的最小单元 */
+export interface EpisodeGame {
+  /** 任务内全局序号（0-based） */
+  gameIndex: number
+  /** 对序号 = gameIndex / 2 */
+  pairIndex: number
+  /** 对内位置：0 = 第一局，1 = 第二局 */
+  pairPosition: number
+  gameSeed: number | null
+  /** 玩家 A（产数据方）是否执红：对内两局应互补（换手） */
+  aIsRed: boolean
+  /** 本局种子是否为对内刷新种子 */
+  seedRefreshed: boolean
+  winner: number | null
+  steps: number
+}
+
+/** 种子反查命中项（/api/episodes/lookup-game） */
+export interface GameLookupItem {
+  episode: Episode
+  game: EpisodeGame
+}
+
+export interface GameLookupPage {
+  items: GameLookupItem[]
 }
 
 /** —— 对局回放（上帝视角，未翻开暗子以 revealedAt 标记明暗）—— */

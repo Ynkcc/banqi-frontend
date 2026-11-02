@@ -2,7 +2,9 @@ import type {
   CollectSpecBody,
   DataKind,
   DataStats,
+  EpisodeGame,
   EpisodePage,
+  GameLookupPage,
   JobControlView,
   JobListPage,
   JobView,
@@ -96,6 +98,12 @@ export const api = {
     request<JobControlView>(`/api/jobs/${encodeURIComponent(jobId)}/${action}`, { method: 'POST' }),
   episodes: (before: number, limit = 100) =>
     request<EpisodePage>(`/api/episodes?before=${before}&limit=${limit}`),
+  /** 某 episode 的逐局标识（换手/种子/配对） */
+  episodeGames: (id: number | string) =>
+    request<EpisodeGame[]>(`/api/episodes/${id}/games`),
+  /** 按对局种子反查所在 episode */
+  lookupGame: (seed: string | number) =>
+    request<GameLookupPage>(`/api/episodes/lookup-game?seed=${seed}`),
   replayGames: (id: number | string) =>
     request<ReplayList>(`/api/episodes/${id}/replay`),
   replayGame: (id: number | string, index: number) =>
