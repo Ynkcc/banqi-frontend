@@ -3,11 +3,9 @@ import {
   App,
   Button,
   Card,
-  Checkbox,
   Form,
   Input,
   Modal,
-  Popconfirm,
   Select,
   Table,
   Tag,
@@ -32,30 +30,15 @@ interface RegisterForm {
   format?: string
   parentSha?: string
   notes?: string
-  skipMatch?: boolean
 }
 
 export default function Networks() {
   const { message } = App.useApp()
   const { data, error, reload } = usePoll(api.networks, 10000)
-  const [busySha, setBusySha] = useState<string>()
-  // 手动登记网络（临时上传场景，skipMatch=true 不发起 gatekeeper 对打）
+  // 手动登记网络（文件本体可经 POST /api/networks/upload 预签名 PUT 上传，或已存在于对象存储）
   const [registerOpen, setRegisterOpen] = useState(false)
   const [registerBusy, setRegisterBusy] = useState(false)
   const [form] = Form.useForm<RegisterForm>()
-
-  const promote = async (sha: string) => {
-    setBusySha(sha)
-    try {
-      await api.promote(sha)
-      message.success(`已晋级 ${shortSha(sha)}`)
-      await reload()
-    } catch (e) {
-      message.error(`晋级失败：${e instanceof Error ? e.message : String(e)}`)
-    } finally {
-      setBusySha(undefined)
-    }
-  }
 
   const register = async () => {
     const values = await form.validateFields()
@@ -66,12 +49,9 @@ export default function Networks() {
         format: values.format,
         parentSha: values.parentSha?.trim() || undefined,
         notes: values.notes?.trim() || undefined,
-        skipMatch: values.skipMatch,
       })
       if (res.accepted) {
-        message.success(
-          res.matchTaskHint ? `${res.message}（${res.matchTaskHint}）` : res.message || '已登记',
-        )
+        message.success(res.message || '已登记')
         setRegisterOpen(false)
         form.resetFields()
         await reload()
@@ -89,9 +69,9 @@ export default function Networks() {
     {
       title: 'sha',
       dataIndex: 'sha',
-      render: (v: string, row) => (
+      render: (v: string) => (
         <Typography.Text code copyable>
-          {row.isBest ? v : shortSha(v)}
+          {shortSha(v)}
         </Typography.Text>
       ),
     },
@@ -103,26 +83,6 @@ export default function Networks() {
     },
     { title: '登记时间', dataIndex: 'createdAt', render: (v: number) => fmtTime(v) },
     { title: '备注', dataIndex: 'notes', render: (v: string) => v || '-' },
-    {
-      title: '操作',
-      width: 120,
-      render: (_, row) =>
-        row.isBest ? (
-          <Tag color="green">best</Tag>
-        ) : (
-          <Popconfirm
-            title={`确认将 ${shortSha(row.sha)} 设为 best？`}
-            description="会立即切换 best 指针，selfplay 将改用该网络。"
-            okText="确认"
-            cancelText="取消"
-            onConfirm={() => promote(row.sha)}
-          >
-            <Button size="small" loading={busySha === row.sha}>
-              手动晋级
-            </Button>
-          </Popconfirm>
-        ),
-    },
   ]
 
   if (error) {
@@ -153,9 +113,10 @@ export default function Networks() {
         <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
           等价 gRPC RegisterNetwork（POST /api/networks）。网络文件需已按
           <Typography.Text code>{' {sha}.{format} '}</Typography.Text>
-          键上传到对象存储。勾选「跳过对打」则本次仅登记、不创建 gatekeeper 对打任务。
+          键上传到对象存储（可先调 POST /api/networks/upload 获取预签名 PUT URL 上传）。
+          登记后即可在 collect / rating job 中以该 sha 引用。
         </Typography.Paragraph>
-        <Form<RegisterForm> form={form} layout="vertical" initialValues={{ format: 'nnue', skipMatch: true }}>
+        <Form<RegisterForm> form={form} layout="vertical" initialValues={{ format: 'nnue' }}>
           <Form.Item
             name="sha"
             label="sha（64 位 hex）"
@@ -180,9 +141,6 @@ export default function Networks() {
           </Form.Item>
           <Form.Item name="notes" label="备注（可选）">
             <Input placeholder="例如：手动临时上传" allowClear />
-          </Form.Item>
-          <Form.Item name="skipMatch" valuePropName="checked">
-            <Checkbox>跳过对打（skipMatch：仅登记，不创建 gatekeeper 对打任务）</Checkbox>
           </Form.Item>
         </Form>
       </Modal>

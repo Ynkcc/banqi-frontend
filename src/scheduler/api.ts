@@ -13,7 +13,6 @@ import type {
   Status,
   StorageView,
   TaskStateStats,
-  TrainersView,
   TrainConfigView,
   WorkerInfo,
 } from './types'
@@ -39,22 +38,21 @@ function readError(body: string): string | undefined {
 export const api = {
   status: () => request<Status>('/api/status'),
   networks: () => request<Network[]>('/api/networks'),
-  registerNetwork: (body: {
-    sha: string
-    parentSha?: string
-    notes?: string
-    format?: string
-    skipMatch?: boolean
-  }) =>
+  /** 预签名 PUT：客户端自行上传权重文件到对象存储，再走 registerNetwork 登记 */
+  signNetworkUpload: (body: { sha: string; format: string; contentLength?: number; contentSha256?: string }) =>
+    request<{ uploadUrl: string; objectKey: string }>('/api/networks/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  registerNetwork: (body: { sha: string; parentSha?: string; notes?: string; format?: string }) =>
     request<{ accepted: boolean; message: string; matchTaskHint?: string }>('/api/networks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
-  promote: (sha: string) => request<{ ok: boolean }>(`/api/networks/${sha}/promote`, { method: 'POST' }),
   matches: () => request<Match[]>('/api/matches'),
   workers: () => request<WorkerInfo[]>('/api/workers'),
-  trainers: () => request<TrainersView>('/api/trainers'),
   setWorkerNote: (id: string, note: string) =>
     request<{ ok: boolean }>(`/api/workers/${encodeURIComponent(id)}/note`, {
       method: 'PUT',
@@ -87,12 +85,7 @@ export const api = {
   replayGame: (id: number | string, index: number) =>
     request<ReplayGame>(`/api/episodes/${id}/replay/${index}`),
   dataStats: () => request<DataStats>('/api/data-stats'),
-  control: (body: {
-    paused?: boolean
-    initialRevealed?: number
-    dataKind?: DataKind
-    clearStop?: boolean
-  }) =>
+  control: (body: { initialRevealed?: number; dataKind?: DataKind; clearStop?: boolean }) =>
     request<{ ok: boolean }>('/api/control', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

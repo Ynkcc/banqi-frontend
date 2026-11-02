@@ -28,19 +28,14 @@ export type DataKind = 'resnet' | 'nnue'
 
 export interface Status {
   variant: string
-  paused: boolean
   initialRevealed: number
   dataKind: DataKind
   minClientVersion: string
   sprt: Sprt
-  best: Network | null
   counts: Counts
-  /** 停机信号（trainer 轮询 GetInfo 后优雅停止） */
+  /** 停机信号（collector 轮询 GetInfo 后优雅停止） */
   shouldStop: boolean
   stopReason: string
-  /** 生成-消费平衡的自动暂停（trainer 消费停滞时由 balance 策略置位） */
-  autoPaused: boolean
-  autoPauseReason: string
 }
 
 export interface Match {
@@ -351,45 +346,3 @@ export interface JobControlView {
   state: string
 }
 
-/** [balance] 配置快照（生成-消费平衡策略） */
-export interface BalanceConfig {
-  enabled: boolean
-  mode: string
-  trainerOnlineSeconds: number
-  stalledSeconds: number
-  backlogPauseBatches: number
-  pauseReanalysis: boolean
-}
-
-/** 单个 trainer 的消费快照（/api/trainers） */
-export interface TrainerInfo {
-  id: string
-  lastSeen: number
-  online: boolean
-  variant: string
-  dataKind: DataKind
-  /** 消费水位：训练线程最后取走的记录所属对象键与映射 episodes.id */
-  consumedKey: string
-  consumedId: number
-  /** 服务端权威积压：该类别已登记最大 id 与未消费批数 */
-  registeredMaxId: number
-  unconsumedBatches: number
-  /** 训练线程累计取走记录数（单调递增 = 消费在推进） */
-  samplesConsumed: number
-  /** trainer 自报：本地积压估计与就绪缓冲存量 */
-  backlog: number
-  buffered: number
-  /** 进程内健康状态：ok | degraded | fatal（空 = 旧客户端，按 ok 语义） */
-  healthStatus?: string
-  lastError?: string
-  /** 训练节奏快照（JSON 透传，结构见 NnueTrainer.progress()；空 = 旧客户端） */
-  progress?: string
-}
-
-/** /api/trainers 视图：平衡策略配置 + 自动暂停状态 + trainer 快照 */
-export interface TrainersView {
-  config: BalanceConfig
-  autoPaused: boolean
-  autoPauseReason: string
-  trainers: TrainerInfo[]
-}

@@ -4,14 +4,12 @@ import {
   Button,
   Card,
   Col,
-  Descriptions,
   InputNumber,
   Progress,
   Row,
   Select,
   Space,
   Statistic,
-  Switch,
   Table,
   Tag,
   Typography,
@@ -20,7 +18,7 @@ import type { TableProps } from 'antd'
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { fmtAgo, kindTagColor, shortSha } from '../format'
-import type { DataKind, KindStats, Match, RunningTask, TrainerInfo } from '../types'
+import type { DataKind, KindStats, Match, RunningTask } from '../types'
 import { usePoll } from '../usePoll'
 
 const DATA_KIND_OPTIONS = [
@@ -47,44 +45,6 @@ const taskColumns: TableProps<RunningTask>['columns'] = [
   { title: '下发时间', dataIndex: 'createdAt', render: (v: number) => fmtAgo(v) },
 ]
 
-const trainerColumns: TableProps<TrainerInfo>['columns'] = [
-  {
-    title: 'Trainer',
-    dataIndex: 'id',
-    render: (v: string) => <Typography.Text code>{v}</Typography.Text>,
-  },
-  {
-    title: '状态',
-    dataIndex: 'online',
-    width: 90,
-    render: (v: boolean, t: TrainerInfo) => (
-      <Tag color={v ? (t.healthStatus === 'fatal' ? 'red' : t.healthStatus === 'degraded' ? 'orange' : 'green') : 'red'}>
-        {v ? (t.healthStatus || 'ok') : '离线'}
-      </Tag>
-    ),
-  },
-  { title: '类别', dataIndex: 'dataKind', width: 80, render: (v: string) => <Tag color={v === 'nnue' ? 'purple' : 'blue'}>{v}</Tag> },
-  {
-    title: '消费进度',
-    dataIndex: 'samplesConsumed',
-    render: (v: number, t: TrainerInfo) => (
-      <span>
-        {v.toLocaleString()} 条
-        <Typography.Text type="secondary">（水位 #{t.consumedId}）</Typography.Text>
-      </span>
-    ),
-  },
-  {
-    title: '未消费批',
-    width: 100,
-    render: (_, t: TrainerInfo) => (
-      <span style={{ color: t.unconsumedBatches > 0 ? '#d46b08' : undefined }}>{t.unconsumedBatches}</span>
-    ),
-  },
-  { title: '缓冲', dataIndex: 'buffered', width: 80 },
-  { title: '心跳', dataIndex: 'lastSeen', render: (v: number) => fmtAgo(v) },
-]
-
 export default function Overview() {
   const { message } = App.useApp()
   const { data, error } = usePoll(api.status, 5000)
@@ -94,8 +54,6 @@ export default function Overview() {
   const dstats = usePoll(api.dataStats, 5000)
   // 任务状态机快照（assigned/completed/expired，僵尸任务诊断）
   const tstats = usePoll(api.taskStats, 5000)
-  // trainer 消费状态（生成-消费平衡：停滞自动暂停的观测面）
-  const trainers = usePoll(api.trainers, 5000)
   const [revealed, setRevealed] = useState<number | null>(null)
   const [kind, setKind] = useState<DataKind | null>(null)
   const [busy, setBusy] = useState(false)
@@ -110,18 +68,6 @@ export default function Overview() {
   }, [data, revealed, kind])
 
   const report = (e: unknown) => message.error(`操作失败：${e instanceof Error ? e.message : String(e)}`)
-
-  const setPaused = async (paused: boolean) => {
-    setBusy(true)
-    try {
-      await api.control({ paused })
-      message.success(paused ? '已暂停 selfplay（rating 继续）' : '已恢复 selfplay')
-    } catch (e) {
-      report(e)
-    } finally {
-      setBusy(false)
-    }
-  }
 
   const applyRevealed = async () => {
     if (revealed === null) return
@@ -154,24 +100,9 @@ export default function Overview() {
   }
 
   const counts = data?.counts
-  const best = data?.best
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      {data?.autoPaused && (
-        <Alert
-          type="error"
-          showIcon
-          message="已自动暂停 selfplay 生成（trainer 消费停滞）"
-          description={
-            <>
-              生成-消费平衡（balance）判定训练侧已停止消费：{data.autoPauseReason}
-              <br />
-              任务派发暂停中；trainer 恢复消费后自动解除。详情见下方「Trainer 消费」。
-            </>
-          }
-        />
-      )}
       <Row gutter={[16, 16]}>
         <Col xs={12} sm={8} lg={4}>
           <Card size="small">
@@ -190,7 +121,7 @@ export default function Overview() {
         </Col>
         <Col xs={12} sm={8} lg={4}>
           <Card size="small">
-            <Statistic title="累计自对弈局数" value={counts?.episodeGames ?? '-'} />
+            <Statistic title="累计对局数" value={counts?.episodeGames ?? '-'} />
           </Card>
         </Col>
         <Col xs={12} sm={8} lg={4}>
@@ -206,15 +137,10 @@ export default function Overview() {
       </Row>
 
       <Row gutter={[16, 16]}>
-        <Col xs={24} md={10}>
+        <Col xs={24}>
           <Card size="small" title="运行控制">
             <Space direction="vertical" size="middle" style={{ width: '100%' }}>
               {/* wrap 允许控件行在窄窗口换行，长提示独立成行避免撑破卡片 */}
-              <Space wrap>
-                <Switch checked={data?.paused} disabled={!data || busy} onChange={setPaused} />
-                <span>暂停 selfplay</span>
-                <Typography.Text type="secondary">暂停后仅下发 rating 任务</Typography.Text>
-              </Space>
               <Space wrap>
                 <span>初始翻子数</span>
                 <InputNumber
@@ -254,28 +180,10 @@ export default function Overview() {
                   </Button>
                 </Space>
                 <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 4 }}>
-                  自对弈产哪类训练数据；nnue 需 collector 具备 Expectimax 采集路径
+                  collect 任务产哪类训练数据；nnue 需 collector 具备 Expectimax 采集路径
                 </Typography.Paragraph>
               </div>
             </Space>
-          </Card>
-        </Col>
-        <Col xs={24} md={14}>
-          <Card size="small" title="当前 best 网络">
-            {best ? (
-              <Descriptions column={1} size="small">
-                <Descriptions.Item label="sha">
-                  <Typography.Text code copyable>
-                    {best.sha}
-                  </Typography.Text>
-                </Descriptions.Item>
-                <Descriptions.Item label="父网络">{best.parentSha || '-'}</Descriptions.Item>
-                <Descriptions.Item label="登记时间">{fmtAgo(best.createdAt)}</Descriptions.Item>
-                <Descriptions.Item label="状态">{best.status}</Descriptions.Item>
-              </Descriptions>
-            ) : (
-              <Typography.Text type="secondary">尚未登记任何网络</Typography.Text>
-            )}
           </Card>
         </Col>
       </Row>
@@ -293,7 +201,7 @@ export default function Overview() {
               pagination={false}
               dataSource={matches.data ?? []}
               scroll={{ x: 'max-content' }}
-              locale={{ emptyText: '无 gatekeeper 对战' }}
+              locale={{ emptyText: '无 rating 对战' }}
               columns={[
                 { title: 'ID', dataIndex: 'id', width: 60 },
                 {
@@ -390,40 +298,6 @@ export default function Overview() {
           </Card>
         </Col>
       </Row>
-
-      <Card
-        size="small"
-        title="Trainer 消费（生成-消费平衡）"
-        extra={
-          trainers.data ? (
-            <Space size={8}>
-              <Tag color={trainers.data.config.enabled ? (trainers.data.config.mode === 'pause' ? 'red' : 'orange') : 'default'}>
-                {trainers.data.config.enabled ? `balance: ${trainers.data.config.mode}` : 'balance: off'}
-              </Tag>
-              {trainers.data.config.pauseReanalysis && <Tag>含 reanalysis</Tag>}
-              <Typography.Text type="secondary">5s 刷新</Typography.Text>
-            </Space>
-          ) : null
-        }
-      >
-        <Table<TrainerInfo>
-          rowKey="id"
-          size="small"
-          pagination={false}
-          dataSource={trainers.data?.trainers ?? []}
-          scroll={{ x: 'max-content' }}
-          locale={{ emptyText: '尚无 trainer 心跳（trainer 需支持 TrainerHeartbeat；balance 未启用时无观测）' }}
-          columns={trainerColumns}
-        />
-        {trainers.data?.trainers.some((t) => t.lastError) && (
-          <Typography.Paragraph type="warning" style={{ marginBottom: 0, marginTop: 8, fontSize: 12 }}>
-            {trainers.data.trainers
-              .filter((t) => t.lastError)
-              .map((t) => `${t.id}: ${t.lastError}`)
-              .join('；')}
-          </Typography.Paragraph>
-        )}
-      </Card>
 
       <Card
         size="small"
