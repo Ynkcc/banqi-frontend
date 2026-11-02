@@ -141,8 +141,8 @@ export interface Episode {
   drawNoCapture: number
   drawTruncation: number
   createdAt: number
-  /** 任务下发的基础种子（未上报为 null） */
-  seedBase?: number | null
+  /** 任务下发的基础种子（无符号十进制字符串，未上报为 null） */
+  seedBase?: string | null
   /** 配对语义快照：成对并行（未上报为 null） */
   pairsParallel?: boolean | null
   /** 配对语义快照：对内第二局是否刷新种子（未上报为 null） */
@@ -163,7 +163,7 @@ export interface EpisodeGame {
   pairIndex: number
   /** 对内位置：0 = 第一局，1 = 第二局 */
   pairPosition: number
-  gameSeed: number | null
+  gameSeed: string | null
   /** 玩家 A（产数据方）是否执红：对内两局应互补（换手） */
   aIsRed: boolean
   /** 本局种子是否为对内刷新种子 */
@@ -190,6 +190,16 @@ export interface ReplayGameSummary {
   winner: number | null
   termination: string
   hasSeed: boolean
+  /** 玩家 A（产数据方）是否执红（对内两局应互补；旧数据按首步行棋方回填） */
+  redIsA: boolean
+  /** 对局种子（无符号十进制字符串） */
+  seed: string | null
+  /** 本局种子是否为对内刷新种子 */
+  seedRefreshed: boolean
+  /** 对序号（旧数据按批内序号回填） */
+  pairIndex: number
+  /** 对内位置 0/1 */
+  pairPosition: number
 }
 
 export interface ReplayList {
@@ -245,7 +255,8 @@ export interface ReplayGame {
   gameLength: number
   winner: number | null
   termination: string
-  seed: number
+  /** 对局种子（无符号十进制字符串；hasSeed=false 时为空串） */
+  seed: string
   hasSeed: boolean
   /** 对局双方：A = 产数据方，B = 对手；RedIsA = 第 0 步行棋方（红先）是否为 A */
   sideA: string

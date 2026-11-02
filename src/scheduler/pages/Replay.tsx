@@ -174,9 +174,11 @@ export default function Replay() {
 
   const options = (list?.games ?? []).map((g) => ({
     value: g.index,
-    label: `第 ${g.index + 1} 局 · ${g.steps} 手 · ${
+    label: `第 ${g.index + 1} 局 · 对#${g.pairIndex}-${g.pairPosition === 0 ? '一' : '二'} · ${
+      g.redIsA ? 'A执红' : 'A执黑'
+    } · ${g.steps} 手 · ${
       g.winner === null || g.winner === undefined ? '作废' : g.winner > 0 ? '红胜' : g.winner < 0 ? '黑胜' : '和棋'
-    } · ${WINNER_LABEL[g.termination] ?? g.termination}${g.hasSeed ? '' : ' · 无种子'}`,
+    } · ${WINNER_LABEL[g.termination] ?? g.termination}${g.hasSeed ? (g.seedRefreshed ? ' · 刷新种子' : '') : ' · 无种子'}`,
   }))
 
   return (
@@ -268,7 +270,23 @@ export default function Replay() {
                   {WINNER_LABEL[game.termination] ?? game.termination}
                 </Tag>
                 <Tag>记录步数 {game.gameLength}</Tag>
-                {game.hasSeed ? <Tag color="purple">seed {game.seed}</Tag> : <Tag color="red">无种子</Tag>}
+                <Tag color={game.redIsA ? 'red' : 'black'}>
+                  换手：A{game.redIsA ? '执红' : '执黑'}
+                </Tag>
+                {list && (
+                  <Tag>
+                    对 #{list.games[game.index]?.pairIndex ?? '-'}-
+                    {list.games[game.index]?.pairPosition === 0 ? '一' : '二'}
+                  </Tag>
+                )}
+                {game.hasSeed ? (
+                  <Space size={2} wrap>
+                    <Tag color="purple">seed {game.seed}</Tag>
+                    {list?.games[game.index]?.seedRefreshed && <Tag color="orange">对内刷新</Tag>}
+                  </Space>
+                ) : (
+                  <Tag color="red">无种子</Tag>
+                )}
               </Space>
               {game.aSideOnly && (
                 <Alert
