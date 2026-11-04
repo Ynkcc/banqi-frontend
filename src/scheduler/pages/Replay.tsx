@@ -1,4 +1,14 @@
-import { Alert, Button, Card, Progress, Segmented, Select, Slider, Space, Statistic, Tag, Typography } from 'antd'
+import Alert from 'antd/es/alert'
+import Button from 'antd/es/button'
+import Card from 'antd/es/card'
+import Progress from 'antd/es/progress'
+import Segmented from 'antd/es/segmented'
+import Select from 'antd/es/select'
+import Slider from 'antd/es/slider'
+import Space from 'antd/es/space'
+import Statistic from 'antd/es/statistic'
+import Tag from 'antd/es/tag'
+import Typography from 'antd/es/typography'
 import {
   CaretRightOutlined,
   LeftOutlined,
@@ -135,6 +145,13 @@ export default function Replay() {
       ? step.hiddenBag
       : (game?.initialBag ?? null)
   const moveCounter = step ? step.moveCounter : 0
+  // 当前展示局面的 BFEN：cursor 0..total-1 用该手步前快照 FEN（cursor 0 = 初始局面）；
+  // cursor == total 显示终局盘面，用 finalFen。旧版后端无 fen 字段时为 null（隐藏该行）。
+  const currentFen = atEnd
+    ? (game?.finalFen ?? null)
+    : step
+      ? (step.fen ?? null)
+      : (game?.initialFen ?? game?.moves[0]?.fen ?? null)
   const maxDraw = dims.rows === 4 && dims.cols === 8 ? 24 : 16
   const drawRatio = Math.min(100, Math.round((moveCounter / maxDraw) * 100))
 
@@ -258,6 +275,17 @@ export default function Replay() {
                 第 {cursor}/{total} 手
               </Typography.Text>
             </Space>
+            {currentFen && (
+              <div className="replay-fen-row">
+                <span className="replay-fen-label">当前局面 BFEN（复制后可在对弈页「FEN 重建」直接复现局面）</span>
+                <Typography.Text
+                  className="replay-fen-text"
+                  copyable={{ text: currentFen, tooltips: ['复制 BFEN', '已复制'] }}
+                >
+                  {currentFen}
+                </Typography.Text>
+              </div>
+            )}
           </div>
         </div>
 

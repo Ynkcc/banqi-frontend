@@ -1,18 +1,16 @@
 import { useState } from 'react'
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Descriptions,
-  Form,
-  Input,
-  Modal,
-  Space,
-  Switch,
-  Tag,
-  Typography,
-} from 'antd'
+import Alert from 'antd/es/alert'
+import App from 'antd/es/app'
+import Button from 'antd/es/button'
+import Card from 'antd/es/card'
+import Descriptions from 'antd/es/descriptions'
+import Form from 'antd/es/form'
+import Input from 'antd/es/input'
+import Modal from 'antd/es/modal'
+import Space from 'antd/es/space'
+import Switch from 'antd/es/switch'
+import Tag from 'antd/es/tag'
+import Typography from 'antd/es/typography'
 import { api } from '../api'
 import type { StorageProfile } from '../types'
 import { usePoll } from '../usePoll'

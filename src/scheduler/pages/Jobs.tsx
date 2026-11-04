@@ -1,19 +1,17 @@
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Descriptions,
-  Modal,
-  Progress,
-  Segmented,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Tooltip,
-  Typography,
-} from 'antd'
+import Alert from 'antd/es/alert'
+import App from 'antd/es/app'
+import Button from 'antd/es/button'
+import Card from 'antd/es/card'
+import Descriptions from 'antd/es/descriptions'
+import Modal from 'antd/es/modal'
+import Progress from 'antd/es/progress'
+import Segmented from 'antd/es/segmented'
+import Select from 'antd/es/select'
+import Space from 'antd/es/space'
+import Table from 'antd/es/table'
+import Tag from 'antd/es/tag'
+import Tooltip from 'antd/es/tooltip'
+import Typography from 'antd/es/typography'
 import type { TableProps } from 'antd'
 import { useEffect, useState } from 'react'
 import { api } from '../api'

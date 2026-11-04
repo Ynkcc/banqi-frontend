@@ -1,19 +1,16 @@
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Col,
-  InputNumber,
-  Progress,
-  Row,
-  Select,
-  Space,
-  Statistic,
-  Table,
-  Tag,
-  Typography,
-} from 'antd'
+import Alert from 'antd/es/alert'
+import App from 'antd/es/app'
+import Button from 'antd/es/button'
+import Card from 'antd/es/card'
+import { Col, Row } from 'antd/es/grid'
+import InputNumber from 'antd/es/input-number'
+import Progress from 'antd/es/progress'
+import Select from 'antd/es/select'
+import Space from 'antd/es/space'
+import Statistic from 'antd/es/statistic'
+import Table from 'antd/es/table'
+import Tag from 'antd/es/tag'
+import Typography from 'antd/es/typography'
 import type { TableProps } from 'antd'
 import { useEffect, useState } from 'react'
 import { api } from '../api'

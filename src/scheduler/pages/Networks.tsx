@@ -1,16 +1,14 @@
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Form,
-  Input,
-  Modal,
-  Select,
-  Table,
-  Tag,
-  Typography,
-} from 'antd'
+import Alert from 'antd/es/alert'
+import App from 'antd/es/app'
+import Button from 'antd/es/button'
+import Card from 'antd/es/card'
+import Form from 'antd/es/form'
+import Input from 'antd/es/input'
+import Modal from 'antd/es/modal'
+import Select from 'antd/es/select'
+import Table from 'antd/es/table'
+import Tag from 'antd/es/tag'
+import Typography from 'antd/es/typography'
 import type { TableProps } from 'antd'
 import { useState } from 'react'
 import { api } from '../api'

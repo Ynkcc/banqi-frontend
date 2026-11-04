@@ -1,16 +1,13 @@
-import {
-  App,
-  Col,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Row,
-  Segmented,
-  Select,
-  Switch,
-  Typography,
-} from 'antd'
+import App from 'antd/es/app'
+import { Col, Row } from 'antd/es/grid'
+import Form from 'antd/es/form'
+import Input from 'antd/es/input'
+import InputNumber from 'antd/es/input-number'
+import Modal from 'antd/es/modal'
+import Segmented from 'antd/es/segmented'
+import Select from 'antd/es/select'
+import Switch from 'antd/es/switch'
+import Typography from 'antd/es/typography'
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { shortSha } from '../format'

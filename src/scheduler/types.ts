@@ -229,6 +229,8 @@ export interface ReplayStep {
   moveCounter: number
   scores: [number, number]
   board: string[]
+  /** 步前快照 BFEN（与 board 同一局面；旧版后端可能缺失） */
+  fen?: string
   revealedAt: boolean[]
   /** 步前暗子袋（上帝视角） */
   hiddenBag: HiddenBag
@@ -264,6 +266,10 @@ export interface ReplayGame {
   redIsA: boolean
   /** 单方面视角录制（仅产数据方行动步，对手行动未记录） */
   aSideOnly: boolean
+  /** 初始局面 BFEN（与 initialBoard 同一局面；旧版后端可能缺失） */
+  initialFen?: string | null
+  /** 终局局面 BFEN（与 finalBoard 同一局面；旧版后端可能缺失） */
+  finalFen?: string | null
   initialBoard: string[]
   initialShown: boolean[]
   initialBag: HiddenBag

@@ -1,15 +1,20 @@
-import { Layout, Menu } from 'antd'
+import Spin from 'antd/es/spin'
+import Layout from 'antd/es/layout'
+import Menu from 'antd/es/menu'
+import { lazy, Suspense } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import Episodes from './pages/Episodes'
-import Generation from './pages/Generation'
-import Jobs from './pages/Jobs'
-import Matches from './pages/Matches'
-import Networks from './pages/Networks'
-import Overview from './pages/Overview'
-import Replay from './pages/Replay'
-import Storage from './pages/Storage'
-import TrainConfig from './pages/TrainConfig'
-import Workers from './pages/Workers'
+
+// 页面按路由懒加载：Table/Form 等重组件只随对应页面分包加载。
+const Episodes = lazy(() => import('./pages/Episodes'))
+const Generation = lazy(() => import('./pages/Generation'))
+const Jobs = lazy(() => import('./pages/Jobs'))
+const Matches = lazy(() => import('./pages/Matches'))
+const Networks = lazy(() => import('./pages/Networks'))
+const Overview = lazy(() => import('./pages/Overview'))
+const Replay = lazy(() => import('./pages/Replay'))
+const Storage = lazy(() => import('./pages/Storage'))
+const TrainConfig = lazy(() => import('./pages/TrainConfig'))
+const Workers = lazy(() => import('./pages/Workers'))
 
 const menuItems = [
   { key: '/', label: <Link to="/">总览</Link> },
@@ -36,20 +41,22 @@ export default function App() {
       </Layout.Sider>
       <Layout>
         <Layout.Content style={{ padding: 24 }}>
-          <Routes>
-            <Route path="/" element={<Overview />} />
-            <Route path="/jobs" element={<Jobs />} />
-            <Route path="/collect" element={<Navigate to="/jobs" replace />} />
-            <Route path="/networks" element={<Networks />} />
-            <Route path="/matches" element={<Matches />} />
-            <Route path="/train-config" element={<TrainConfig />} />
-            <Route path="/storage" element={<Storage />} />
-            <Route path="/workers" element={<Workers />} />
-            <Route path="/episodes" element={<Episodes />} />
-            <Route path="/replay" element={<Replay />} />
-            <Route path="/generation" element={<Generation />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <Suspense fallback={<Spin size="large" style={{ display: 'block', margin: '80px auto' }} />}>
+            <Routes>
+              <Route path="/" element={<Overview />} />
+              <Route path="/jobs" element={<Jobs />} />
+              <Route path="/collect" element={<Navigate to="/jobs" replace />} />
+              <Route path="/networks" element={<Networks />} />
+              <Route path="/matches" element={<Matches />} />
+              <Route path="/train-config" element={<TrainConfig />} />
+              <Route path="/storage" element={<Storage />} />
+              <Route path="/workers" element={<Workers />} />
+              <Route path="/episodes" element={<Episodes />} />
+              <Route path="/replay" element={<Replay />} />
+              <Route path="/generation" element={<Generation />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </Layout.Content>
       </Layout>
     </Layout>

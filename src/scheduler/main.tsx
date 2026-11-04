@@ -1,5 +1,8 @@
-import { App as AntApp, ConfigProvider } from 'antd'
-import zhCN from 'antd/locale/zh_CN'
+// antd 用 es 子路径导入：本组合 Vite7/Rollup 下 barrel 命名导入存在摇树泄漏
+// （未使用组件如 DatePicker/Form 会被整包拖入），子路径导入可稳定摇树。
+import AntApp from 'antd/es/app'
+import ConfigProvider from 'antd/es/config-provider'
+import zhCN from 'antd/es/locale/zh_CN'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'
