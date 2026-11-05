@@ -55,6 +55,8 @@ export interface Match {
 
 export interface WorkerInfo {
   id: string
+  /** 心跳连接的远端 IP（旧数据/无连接地址时为空串） */
+  ip?: string
   /** 运维备注（WebUI 手工标注的名称/用途，心跳不覆盖） */
   note: string
   lastSeen: number

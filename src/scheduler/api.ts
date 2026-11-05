@@ -64,6 +64,11 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ note }),
     }),
+  /** 删除 worker 登记记录（调度器仅允许删除离线 worker） */
+  deleteWorker: (id: string) =>
+    request<{ ok: boolean }>(`/api/workers/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
   tasks: () => request<RunningTask[]>('/api/tasks'),
   taskStats: () => request<TaskStateStats>('/api/task-stats'),
   jobs: (
