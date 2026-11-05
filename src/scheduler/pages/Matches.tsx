@@ -177,16 +177,36 @@ export default function Matches() {
     {
       title: 'LLR',
       width: 220,
-      render: (_, m) => (
-        <Typography.Text>
-          {m.llr.toFixed(3)} <Typography.Text type="secondary">({m.lower.toFixed(2)} ~ {m.upper.toFixed(2)})</Typography.Text>
-        </Typography.Text>
-      ),
+      render: (_, m) =>
+        m.conclusion ? (
+          <Tooltip
+            title={`判停时持久化：LLR=${m.conclusion.llr.toFixed(3)} · elo0=${m.conclusion.sprtElo0} · elo1=${m.conclusion.sprtElo1} · α=${m.conclusion.sprtAlpha} · β=${m.conclusion.sprtBeta}`}
+          >
+            <Typography.Text>
+              {m.conclusion.llr.toFixed(3)}{' '}
+              <Typography.Text type="secondary">(elo0={m.conclusion.sprtElo0} · elo1={m.conclusion.sprtElo1})</Typography.Text>
+            </Typography.Text>
+          </Tooltip>
+        ) : (
+          <Typography.Text>
+            {m.llr.toFixed(3)} <Typography.Text type="secondary">({m.lower.toFixed(2)} ~ {m.upper.toFixed(2)})</Typography.Text>
+          </Typography.Text>
+        ),
     },
     {
       title: 'SPRT 判定',
       dataIndex: 'verdict',
-      render: (v: string) => <Tag color={verdictColor[v] ?? 'default'}>{v}</Tag>,
+      render: (_, m) => {
+        const v = m.conclusion?.verdict ?? m.verdict
+        const tip = m.conclusion
+          ? `判停时刻持久化的结论（基于该任务自带的 SPRT 参数：elo0=${m.conclusion.sprtElo0} · elo1=${m.conclusion.sprtElo1} · α=${m.conclusion.sprtAlpha} · β=${m.conclusion.sprtBeta}）；上方 LLR 为实时用全局配置重算的预览值`
+          : undefined
+        return (
+          <Tooltip title={tip}>
+            <Tag color={verdictColor[v] ?? 'default'}>{v}</Tag>
+          </Tooltip>
+        )
+      },
     },
   ]
 

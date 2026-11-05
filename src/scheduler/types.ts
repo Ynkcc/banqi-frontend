@@ -38,6 +38,16 @@ export interface Status {
   stopReason: string
 }
 
+/** 判停时刻持久化的 SPRT 结论与实际使用的参数（running / 旧数据为 null） */
+export interface MatchConclusion {
+  verdict: string
+  llr: number
+  sprtElo0: number
+  sprtElo1: number
+  sprtAlpha: number
+  sprtBeta: number
+}
+
 export interface Match {
   id: number
   candidate: string
@@ -51,6 +61,7 @@ export interface Match {
   lower: number
   upper: number
   verdict: string
+  conclusion: MatchConclusion | null
 }
 
 export interface WorkerInfo {
