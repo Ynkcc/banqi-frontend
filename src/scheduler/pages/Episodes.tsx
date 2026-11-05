@@ -8,7 +8,7 @@ import Tag from 'antd/es/tag'
 import Typography from 'antd/es/typography'
 import type { TableProps } from 'antd'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { fmtTime, kindTagColor, shortSha, winnerText } from '../format'
 import { resizableHeader, useColumnSettings } from '../hooks/useColumnSettings'
@@ -217,10 +217,15 @@ function ExpandedGames({ episode }: { episode: Episode }) {
 }
 
 export default function Episodes() {
+  const [params, setParams] = useSearchParams()
+  const matchFilter = Math.max(0, Math.trunc(Number(params.get('match')) || 0))
   const [page, setPage] = useState(1)
   const [cursors, setCursors] = useState<number[]>([0])
   const before = cursors[page - 1] ?? 0
-  const { data, error } = usePoll(() => api.episodes(before, limit), 10000)
+  const { data, error, reload } = usePoll(
+    () => api.episodes(before, limit, matchFilter || undefined),
+    10000,
+  )
   const { columns: episodeColumns, settings: episodeSettings } = useColumnSettings<Episode>('scheduler.episodes', columns)
   const { columns: lookupTableColumns, settings: lookupSettings } = useColumnSettings<GameLookupItem>(
     'scheduler.episodes-lookup',
@@ -238,6 +243,13 @@ export default function Episodes() {
     setCursors([...cursors, last.id])
     setPage(page + 1)
   }
+
+  // match 过滤变化：重置分页游标并立即刷新
+  useEffect(() => {
+    setPage(1)
+    setCursors([0])
+    void reload()
+  }, [matchFilter, reload])
 
   const doLookup = (value: string) => {
     const seed = value.trim()
@@ -295,7 +307,16 @@ export default function Episodes() {
       </Card>
       <Card
         size="small"
-        title={`对局记录（按 ID 倒序，第 ${page} 页，本页 ${data?.items.length ?? 0} 条；展开行可核对逐局换手与种子）`}
+        title={
+          <Space size={8}>
+            <span>{`对局记录（按 ID 倒序，第 ${page} 页，本页 ${data?.items.length ?? 0} 条；展开行可核对逐局换手与种子）`}</span>
+            {matchFilter > 0 && (
+              <Tag color="blue" closable onClose={() => setParams({})}>
+                仅 Match #{matchFilter}
+              </Tag>
+            )}
+          </Space>
+        }
         extra={
           <Space>
             {episodeSettings}

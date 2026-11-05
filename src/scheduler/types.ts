@@ -157,6 +157,30 @@ export interface EpisodePage {
   hasMore: boolean
 }
 
+/** —— match"对"级反查（/api/matches/{id}/pairs）—— */
+
+export interface MatchPairItem {
+  episodeId: number
+  /** 对序号 */
+  pairIndex: number
+  /** 两局的局号（pair_position 0/1 顺序） */
+  gameIndexes: number[]
+  /** 两局候选（A=产数据方）视角结果，如 WL（W=胜 / L=负 / D=和） */
+  results: string
+}
+
+export interface MatchPairCategory {
+  /** 桶名：LL / LD / DD / WL / DW / WW */
+  category: string
+  count: number
+  items: MatchPairItem[]
+}
+
+export interface MatchPairsPage {
+  matchId: number
+  pairs: MatchPairCategory[]
+}
+
 /** 逐局标识（/api/episodes/{id}/games）：对局反查与配对关联的最小单元 */
 export interface EpisodeGame {
   /** 任务内全局序号（0-based） */

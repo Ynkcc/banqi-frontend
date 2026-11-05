@@ -9,6 +9,7 @@ import type {
   JobListPage,
   JobView,
   Match,
+  MatchPairsPage,
   Network,
   RatingSpecBody,
   ReplayGame,
@@ -101,8 +102,12 @@ export const api = {
     }),
   controlJob: (jobId: string, action: 'pause' | 'resume' | 'cancel') =>
     request<JobControlView>(`/api/jobs/${encodeURIComponent(jobId)}/${action}`, { method: 'POST' }),
-  episodes: (before: number, limit = 100) =>
-    request<EpisodePage>(`/api/episodes?before=${before}&limit=${limit}`),
+  episodes: (before: number, limit = 100, matchId?: number) =>
+    request<EpisodePage>(
+      `/api/episodes?before=${before}&limit=${limit}${matchId ? `&match=${matchId}` : ''}`,
+    ),
+  /** 某 match 的"对"级六分类明细（LL/LD/DD/WL/DW/WW，候选视角） */
+  matchPairs: (id: number | string) => request<MatchPairsPage>(`/api/matches/${id}/pairs`),
   /** 某 episode 的逐局标识（换手/种子/配对） */
   episodeGames: (id: number | string) =>
     request<EpisodeGame[]>(`/api/episodes/${id}/games`),
