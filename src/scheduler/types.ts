@@ -16,13 +16,6 @@ export interface Network {
   notes: string
 }
 
-export interface Sprt {
-  elo0: number
-  elo1: number
-  alpha: number
-  beta: number
-}
-
 /** 自对弈产出的数据类别（与 proto DataKind 对应） */
 export type DataKind = 'resnet' | 'nnue'
 
@@ -31,7 +24,6 @@ export interface Status {
   initialRevealed: number
   dataKind: DataKind
   minClientVersion: string
-  sprt: Sprt
   counts: Counts
   /** 停机信号（collector 轮询 GetInfo 后优雅停止） */
   shouldStop: boolean
