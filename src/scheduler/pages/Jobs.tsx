@@ -6,7 +6,6 @@ import Descriptions from 'antd/es/descriptions'
 import Modal from 'antd/es/modal'
 import Progress from 'antd/es/progress'
 import Segmented from 'antd/es/segmented'
-import Select from 'antd/es/select'
 import Space from 'antd/es/space'
 import Table from 'antd/es/table'
 import Tag from 'antd/es/tag'
@@ -32,6 +31,36 @@ const EPISODE_LIMIT = 20
 
 const JOB_KINDS = ['all', 'collect', 'rating'] as const
 const JOB_STATES = ['all', 'running', 'paused', 'completed', 'cancelled'] as const
+
+const stateLabel: Record<(typeof JOB_STATES)[number], string> = {
+  all: '全部',
+  running: '运行中',
+  paused: '暂停',
+  completed: '已完成',
+  cancelled: '已取消',
+}
+
+/** 类型/状态筛选持久化 key */
+const JOBS_FILTER_KEY = 'scheduler.jobs::filters'
+
+function loadJobFilters(): { kind: (typeof JOB_KINDS)[number]; state: (typeof JOB_STATES)[number] } {
+  const fallback = { kind: 'all' as const, state: 'all' as const }
+  try {
+    const raw = window.localStorage.getItem(JOBS_FILTER_KEY)
+    if (!raw) return fallback
+    const parsed = JSON.parse(raw) as Partial<{ kind: string; state: string }>
+    return {
+      kind: JOB_KINDS.includes(parsed.kind as (typeof JOB_KINDS)[number])
+        ? (parsed.kind as (typeof JOB_KINDS)[number])
+        : 'all',
+      state: JOB_STATES.includes(parsed.state as (typeof JOB_STATES)[number])
+        ? (parsed.state as (typeof JOB_STATES)[number])
+        : 'all',
+    }
+  } catch {
+    return fallback
+  }
+}
 
 const stateTag = (state: string) => {
   const color =
@@ -82,10 +111,20 @@ export default function Jobs() {
   const { message } = App.useApp()
 
   // —— 任务列表（持久化 job，全 kind/全状态；服务端分页）——
-  const [kindFilter, setKindFilter] = useState<(typeof JOB_KINDS)[number]>('all')
-  const [stateFilter, setStateFilter] = useState<(typeof JOB_STATES)[number]>('all')
+  const savedFilters = loadJobFilters()
+  const [kindFilter, setKindFilter] = useState<(typeof JOB_KINDS)[number]>(savedFilters.kind)
+  const [stateFilter, setStateFilter] = useState<(typeof JOB_STATES)[number]>(savedFilters.state)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+
+  // 记住类型与状态选择
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(JOBS_FILTER_KEY, JSON.stringify({ kind: kindFilter, state: stateFilter }))
+    } catch {
+      // 忽略持久化失败
+    }
+  }, [kindFilter, stateFilter])
   const jobs = usePoll(
     () =>
       api.jobs(
@@ -417,18 +456,14 @@ export default function Jobs() {
               }}
               options={JOB_KINDS.map((k) => ({ value: k, label: k === 'all' ? '全部类型' : k }))}
             />
-            <Select
+            <Segmented
               size="small"
-              style={{ width: 110 }}
               value={stateFilter}
               onChange={(v) => {
-                setStateFilter(v)
+                setStateFilter(v as (typeof JOB_STATES)[number])
                 setPage(1)
               }}
-              options={JOB_STATES.map((s) => ({
-                value: s,
-                label: s === 'all' ? '全部状态' : stateTag(s),
-              }))}
+              options={JOB_STATES.map((s) => ({ value: s, label: stateLabel[s] }))}
             />
             <Button type="primary" size="small" onClick={() => setCreateOpen(true)}>
               新建任务

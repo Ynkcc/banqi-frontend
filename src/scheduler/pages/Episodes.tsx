@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { fmtTime, kindTagColor, shortSha, winnerText } from '../format'
+import { resizableHeader, useColumnSettings } from '../hooks/useColumnSettings'
 import type { Episode, EpisodeGame, GameLookupItem } from '../types'
 import { usePoll } from '../usePoll'
 
@@ -62,11 +63,38 @@ const gameColumns: TableProps<EpisodeGame>['columns'] = [
   { title: '步数', dataIndex: 'steps', width: 80 },
 ]
 
+const lookupColumns: TableProps<GameLookupItem>['columns'] = [
+  {
+    title: 'Episode',
+    width: 100,
+    render: (_, it) => <Link to={`/replay?episode=${it.episode.id}`}>#{it.episode.id}</Link>,
+  },
+  { title: '局号', width: 70, render: (_, it) => it.game.gameIndex },
+  {
+    title: '对',
+    width: 90,
+    render: (_, it) => (
+      <Typography.Text type="secondary">
+        #{it.game.pairIndex}-{it.game.pairPosition === 0 ? '一' : '二'}
+      </Typography.Text>
+    ),
+  },
+  { title: '换手', width: 90, render: (_, it) => aIsRedTag(it.game.aIsRed) },
+  { title: '种子刷新', width: 100, render: (_, it) => refreshTag(it.game.seedRefreshed) },
+  { title: '登记时间', width: 160, render: (_, it) => fmtTime(it.episode.createdAt) },
+  {
+    title: 'Worker',
+    dataIndex: ['episode', 'workerId'],
+    width: 140,
+  },
+]
+
 const columns: TableProps<Episode>['columns'] = [
   { title: 'ID', dataIndex: 'id', width: 90 },
-  { title: 'Worker', dataIndex: 'workerId' },
+  { title: 'Worker', dataIndex: 'workerId', width: 140 },
   {
     title: '对阵',
+    width: 220,
     ellipsis: true,
     render: (_, record) => {
       const a = <Typography.Text code>{shortSha(record.networkSha)}</Typography.Text>
@@ -136,7 +164,7 @@ const columns: TableProps<Episode>['columns'] = [
       )
     },
   },
-  { title: '登记时间', dataIndex: 'createdAt', render: (v: number) => fmtTime(v) },
+  { title: '登记时间', dataIndex: 'createdAt', width: 160, render: (v: number) => fmtTime(v) },
   {
     title: 'Match',
     width: 70,
@@ -146,6 +174,7 @@ const columns: TableProps<Episode>['columns'] = [
   {
     title: 'R2 对象键',
     dataIndex: 'objectKey',
+    width: 200,
     ellipsis: true,
     render: (v: string) => <Typography.Text type="secondary">{v}</Typography.Text>,
   },
@@ -192,6 +221,11 @@ export default function Episodes() {
   const [cursors, setCursors] = useState<number[]>([0])
   const before = cursors[page - 1] ?? 0
   const { data, error } = usePoll(() => api.episodes(before, limit), 10000)
+  const { columns: episodeColumns, settings: episodeSettings } = useColumnSettings<Episode>('scheduler.episodes', columns)
+  const { columns: lookupTableColumns, settings: lookupSettings } = useColumnSettings<GameLookupItem>(
+    'scheduler.episodes-lookup',
+    lookupColumns,
+  )
 
   const [seedInput, setSeedInput] = useState('')
   const [lookup, setLookup] = useState<GameLookupItem[] | null>(null)
@@ -243,6 +277,7 @@ export default function Episodes() {
               命中 {lookup.length} 条
             </Typography.Text>
           )}
+          {lookupSettings}
         </Space>
         {lookupErr && <Alert type="error" showIcon message="反查失败" description={lookupErr} style={{ marginTop: 8 }} />}
         {lookup != null && (
@@ -252,34 +287,9 @@ export default function Episodes() {
             size="small"
             pagination={false}
             dataSource={lookup}
-            columns={[
-              {
-                title: 'Episode',
-                width: 100,
-                render: (_, it) => <Link to={`/replay?episode=${it.episode.id}`}>#{it.episode.id}</Link>,
-              },
-              { title: '局号', width: 70, render: (_, it) => it.game.gameIndex },
-              {
-                title: '对',
-                width: 90,
-                render: (_, it) => (
-                  <Typography.Text type="secondary">
-                    #{it.game.pairIndex}-{it.game.pairPosition === 0 ? '一' : '二'}
-                  </Typography.Text>
-                ),
-              },
-              { title: '换手', width: 90, render: (_, it) => aIsRedTag(it.game.aIsRed) },
-              { title: '种子刷新', width: 100, render: (_, it) => refreshTag(it.game.seedRefreshed) },
-              {
-                title: '登记时间',
-                render: (_, it) => fmtTime(it.episode.createdAt),
-              },
-              {
-                title: 'Worker',
-                dataIndex: ['episode', 'workerId'],
-                width: 140,
-              },
-            ]}
+            columns={lookupTableColumns}
+            components={resizableHeader}
+            scroll={{ x: 'max-content' }}
           />
         )}
       </Card>
@@ -288,6 +298,7 @@ export default function Episodes() {
         title={`对局记录（按 ID 倒序，第 ${page} 页，本页 ${data?.items.length ?? 0} 条；展开行可核对逐局换手与种子）`}
         extra={
           <Space>
+            {episodeSettings}
             <Button size="small" disabled={page === 1} onClick={() => setPage(page - 1)}>
               上一页
             </Button>
@@ -300,9 +311,11 @@ export default function Episodes() {
         <Table<Episode>
           rowKey="id"
           size="small"
-          columns={columns}
+          columns={episodeColumns}
           dataSource={data?.items ?? []}
           pagination={false}
+          components={resizableHeader}
+          scroll={{ x: 'max-content' }}
           expandable={{
             expandedRowRender: (record) => <ExpandedGames episode={record} />,
             rowExpandable: () => true,
