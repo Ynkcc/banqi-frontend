@@ -33,7 +33,8 @@ export interface Status {
 /** 判停时刻持久化的 SPRT 结论与实际使用的参数（running / 旧数据为 null） */
 export interface MatchConclusion {
   verdict: string
-  llr: number
+  /** 旧后端可能下发 null（NaN 序列化） */
+  llr: number | null
   sprtElo0: number
   sprtElo1: number
   sprtAlpha: number
@@ -49,9 +50,10 @@ export interface Match {
   numGames: number
   targetGames: number
   score: number | null
-  llr: number
-  lower: number
-  upper: number
+  /** 旧后端可能下发 null（NaN/Infinity 序列化），渲染须走 fmtNum */
+  llr: number | null
+  lower: number | null
+  upper: number | null
   verdict: string
   conclusion: MatchConclusion | null
 }

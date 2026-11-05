@@ -17,6 +17,10 @@ export const fmtMemory = (mb: number) => (mb > 0 ? `${(mb / 1024).toFixed(1)} Gi
 export const fmtCount = (n: number) =>
   n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${(n / 1e3).toFixed(1)}k` : String(n)
 
+/** 数值安全格式化：null / 非有限值（旧后端可能下发）时显示占位符，避免 toFixed 崩溃白屏 */
+export const fmtNum = (v: number | null | undefined, digits: number, fallback = '—') =>
+  typeof v === 'number' && Number.isFinite(v) ? v.toFixed(digits) : fallback
+
 export const winnerText = (winner: number) => (winner > 0 ? '红胜' : winner < 0 ? '黑胜' : '和棋')
 
 /** 数据类别 → Tag 颜色：resnet=蓝 / nnue=紫 / none=灰（不产训练数据的对局记录）。 */

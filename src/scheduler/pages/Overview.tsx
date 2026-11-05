@@ -14,7 +14,7 @@ import Typography from 'antd/es/typography'
 import type { TableProps } from 'antd'
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import { fmtAgo, kindTagColor, shortSha } from '../format'
+import { fmtAgo, fmtNum, kindTagColor, shortSha } from '../format'
 import type { DataKind, KindStats, Match, RunningTask } from '../types'
 import { usePoll } from '../usePoll'
 
@@ -227,9 +227,9 @@ export default function Overview() {
                   width: 170,
                   render: (_, m: Match) => (
                     <span>
-                      {m.llr.toFixed(2)}{' '}
+                      {fmtNum(m.llr, 2)}{' '}
                       <Typography.Text type="secondary">
-                        ({m.lower.toFixed(2)}~{m.upper.toFixed(2)})
+                        ({fmtNum(m.lower, 2)}~{fmtNum(m.upper, 2)})
                       </Typography.Text>
                     </span>
                   ),

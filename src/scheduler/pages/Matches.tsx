@@ -11,7 +11,7 @@ import type { TableProps } from 'antd'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
-import { shortSha } from '../format'
+import { fmtNum, shortSha } from '../format'
 import type { Match, MatchPairItem, MatchPairsPage } from '../types'
 import { usePoll } from '../usePoll'
 
@@ -180,16 +180,16 @@ export default function Matches() {
       render: (_, m) =>
         m.conclusion ? (
           <Tooltip
-            title={`判停时持久化：LLR=${m.conclusion.llr.toFixed(3)} · elo0=${m.conclusion.sprtElo0} · elo1=${m.conclusion.sprtElo1} · α=${m.conclusion.sprtAlpha} · β=${m.conclusion.sprtBeta}`}
+            title={`判停时持久化：LLR=${fmtNum(m.conclusion.llr, 3)} · elo0=${m.conclusion.sprtElo0} · elo1=${m.conclusion.sprtElo1} · α=${m.conclusion.sprtAlpha} · β=${m.conclusion.sprtBeta}`}
           >
             <Typography.Text>
-              {m.conclusion.llr.toFixed(3)}{' '}
+              {fmtNum(m.conclusion.llr, 3)}{' '}
               <Typography.Text type="secondary">(elo0={m.conclusion.sprtElo0} · elo1={m.conclusion.sprtElo1})</Typography.Text>
             </Typography.Text>
           </Tooltip>
         ) : (
           <Typography.Text>
-            {m.llr.toFixed(3)} <Typography.Text type="secondary">({m.lower.toFixed(2)} ~ {m.upper.toFixed(2)})</Typography.Text>
+            {fmtNum(m.llr, 3)} <Typography.Text type="secondary">({fmtNum(m.lower, 2)} ~ {fmtNum(m.upper, 2)})</Typography.Text>
           </Typography.Text>
         ),
     },
