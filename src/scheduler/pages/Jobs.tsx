@@ -22,6 +22,7 @@ import type {
   PlayerSpec,
   RatingSpecBody,
   RunningTask,
+  SeedStrategyBody,
   TaskStateStats,
 } from '../types'
 import { usePoll } from '../usePoll'
@@ -95,6 +96,73 @@ const seedKindText: Record<string, string> = {
   random: 'random（随机）',
   incremental: 'incremental（递增）',
   range: 'range（区间）',
+}
+
+/** 种子策略参数明细（fixed/incremental/range 各异） */
+const seedExtra = (s?: SeedStrategyBody): string => {
+  if (!s) return ''
+  if (s.kind === 'fixed') return `seed=${s.fixedSeed}`
+  if (s.kind === 'incremental') return `base=${s.baseSeed}`
+  if (s.kind === 'range') return `[${s.minSeed}, ${s.maxSeed}]`
+  return ''
+}
+
+/** 起始局面（start_fens）：空 = 默认随机开局 */
+const startFensView = (fens?: string[]) => {
+  if (!fens || fens.length === 0) {
+    return <Typography.Text type="secondary">默认随机开局</Typography.Text>
+  }
+  return (
+    <Space direction="vertical" size={0} wrap>
+      {fens.map((f, i) => (
+        <Typography.Text key={i} code style={{ fontSize: 12 }}>
+          {f}
+        </Typography.Text>
+      ))}
+    </Space>
+  )
+}
+
+/** 搜索规格宽容渲染（字段多且随版本演进，仅展示非空项） */
+const renderSearch = (search: unknown) => {
+  if (!search || typeof search !== 'object') return null
+  const entries = Object.entries(search as Record<string, unknown>).filter(
+    ([, v]) =>
+      v !== null &&
+      v !== undefined &&
+      v !== '' &&
+      !(Array.isArray(v) && v.length === 0) &&
+      !(typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0),
+  )
+  if (entries.length === 0) return null
+  return (
+    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      搜索参数：
+      {entries.map(([k, v]) => (
+        <Tag key={k} style={{ fontSize: 12 }}>
+          {k}={String(v)}
+        </Tag>
+      ))}
+    </Typography.Text>
+  )
+}
+
+/** 展开详情里的选手完整信息：kind + 完整 sha（可复制）+ 搜索参数 */
+const playerDetail = (p?: PlayerSpec) => {
+  if (!p) return <Typography.Text type="secondary">-</Typography.Text>
+  return (
+    <Space direction="vertical" size={2}>
+      <Space size={4}>
+        <Tag>{p.kind || 'network'}</Tag>
+        {p.networkSha && (
+          <Typography.Text code copyable={{ text: p.networkSha }}>
+            {p.networkSha}
+          </Typography.Text>
+        )}
+      </Space>
+      {renderSearch(p.search)}
+    </Space>
+  )
 }
 
 const playerCell = (p?: PlayerSpec) => {
@@ -292,14 +360,7 @@ export default function Jobs() {
         if (!spec?.seedStrategy) return '-'
         const s = spec.seedStrategy
         const detail = seedKindText[s.kind] ?? s.kind
-        const extra =
-          s.kind === 'fixed'
-            ? `seed=${s.fixedSeed}`
-            : s.kind === 'incremental'
-              ? `base=${s.baseSeed}`
-              : s.kind === 'range'
-                ? `[${s.minSeed}, ${s.maxSeed}]`
-                : ''
+        const extra = seedExtra(s)
         return (
           <Tooltip title={extra ? `${detail} · ${extra}` : detail}>
             <span>
@@ -493,6 +554,10 @@ export default function Jobs() {
             expandedRowRender: (j) => {
               const spec = specOf(j)
               if (spec) {
+                const s = spec.seedStrategy
+                const seedText = s
+                  ? [seedKindText[s.kind] ?? s.kind, seedExtra(s)].filter(Boolean).join(' · ')
+                  : '-'
                 return (
                   <Descriptions column={3} size="small" bordered>
                     <Descriptions.Item label="variant">{spec.variant}</Descriptions.Item>
@@ -500,12 +565,13 @@ export default function Jobs() {
                       {spec.scenario === 'all_revealed' ? '全明子（all_revealed）' : '标准（standard）'}
                     </Descriptions.Item>
                     <Descriptions.Item label="数据类别">{spec.dataKind}</Descriptions.Item>
-                    <Descriptions.Item label="选手 A">{playerCell(spec.playerA)}</Descriptions.Item>
-                    <Descriptions.Item label="选手 B">{playerCell(spec.playerB)}</Descriptions.Item>
-                    <Descriptions.Item label="种子策略">{seedKindText[spec.seedStrategy?.kind] ?? spec.seedStrategy?.kind}</Descriptions.Item>
+                    <Descriptions.Item label="选手 A" span={3}>{playerDetail(spec.playerA)}</Descriptions.Item>
+                    <Descriptions.Item label="选手 B" span={3}>{playerDetail(spec.playerB)}</Descriptions.Item>
+                    <Descriptions.Item label="种子策略">{seedText}</Descriptions.Item>
                     <Descriptions.Item label="目标局数">{fmtCount(spec.totalGames)}</Descriptions.Item>
                     <Descriptions.Item label="成对并行">{spec.pairsParallel ? '是' : '否'}</Descriptions.Item>
                     <Descriptions.Item label="成对种子刷新">{spec.pairSeedRefresh ? '是' : '否'}</Descriptions.Item>
+                    <Descriptions.Item label="起始局面" span={3}>{startFensView(spec.startFens)}</Descriptions.Item>
                   </Descriptions>
                 )
               }
@@ -514,30 +580,46 @@ export default function Jobs() {
                 const stats = j.ratingStats
                 return (
                   <Descriptions column={3} size="small" bordered>
-                    <Descriptions.Item label="候选网络">
-                      <Typography.Text code copyable={{ text: rs.candidateSha }}>
-                        {shortSha(rs.candidateSha)}
-                      </Typography.Text>
-                    </Descriptions.Item>
-                    <Descriptions.Item label="对手网络">
-                      <Typography.Text code copyable={{ text: rs.opponentSha }}>
-                        {shortSha(rs.opponentSha)}
-                      </Typography.Text>
+                    <Descriptions.Item label="variant">{rs.variant || '-'}</Descriptions.Item>
+                    <Descriptions.Item label="场景">
+                      {rs.scenario === 'all_revealed' ? '全明子（all_revealed）' : '标准（standard）'}
                     </Descriptions.Item>
                     <Descriptions.Item label="目标局数">
                       {rs.totalGames > 0 ? fmtCount(rs.totalGames) : '仅 SPRT 判停'}
                     </Descriptions.Item>
+                    <Descriptions.Item label="候选网络">
+                      {rs.candidateSha ? (
+                        <Typography.Text code copyable={{ text: rs.candidateSha }}>
+                          {rs.candidateSha}
+                        </Typography.Text>
+                      ) : (
+                        '-'
+                      )}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="对手网络">
+                      {rs.opponentSha ? (
+                        <Typography.Text code copyable={{ text: rs.opponentSha }}>
+                          {rs.opponentSha}
+                        </Typography.Text>
+                      ) : (
+                        '-'
+                      )}
+                    </Descriptions.Item>
                     <Descriptions.Item label="SPRT 参数">
                       {`elo0=${rs.sprtElo0} · elo1=${rs.sprtElo1} · α=${rs.sprtAlpha} · β=${rs.sprtBeta}`}
                     </Descriptions.Item>
-                    <Descriptions.Item label="Match 状态">{stats?.matchStatus ?? '-'}</Descriptions.Item>
-                    <Descriptions.Item label="双方棋手">
-                      {stats ? `${stats.sideAKind} vs ${stats.sideBKind}` : '-'}
+                    <Descriptions.Item label="side A" span={3}>
+                      {rs.sideA ? playerDetail(rs.sideA) : stats ? stats.sideAKind : '-'}
                     </Descriptions.Item>
+                    <Descriptions.Item label="side B" span={3}>
+                      {rs.sideB ? playerDetail(rs.sideB) : stats ? stats.sideBKind : '-'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Match 状态">{stats?.matchStatus ?? '-'}</Descriptions.Item>
                     <Descriptions.Item label="对局统计（对）" span={2}>
                       {stats ? `LL ${stats.ll} / LD ${stats.ld} / DD ${stats.dd} / WL ${stats.wl} / DW ${stats.dw} / WW ${stats.ww}` : '-'}
                     </Descriptions.Item>
                     <Descriptions.Item label="已完成局数">{stats ? fmtCount(stats.numGames) : '-'}</Descriptions.Item>
+                    <Descriptions.Item label="起始局面" span={3}>{startFensView(rs.startFens)}</Descriptions.Item>
                   </Descriptions>
                 )
               }

@@ -57,6 +57,11 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
+  /** 预签名 GET：获取网络权重文件下载 URL（TTL 1 小时，直连对象存储） */
+  networkDownload: (sha: string) =>
+    request<{ url: string; objectKey: string }>(
+      `/api/networks/${encodeURIComponent(sha)}/download`,
+    ),
   matches: () => request<Match[]>('/api/matches'),
   workers: () => request<WorkerInfo[]>('/api/workers'),
   setWorkerNote: (id: string, note: string) =>

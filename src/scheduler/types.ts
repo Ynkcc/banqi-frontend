@@ -14,6 +14,8 @@ export interface Network {
   isBest: boolean
   status: string
   notes: string
+  /** 权重文件格式（nnue/onnx/pt）；旧调度器可能缺失 */
+  format?: string
 }
 
 /** 自对弈产出的数据类别（与 proto DataKind 对应） */
@@ -400,6 +402,8 @@ export interface CollectSpecBody {
   totalGames: number
   pairsParallel?: boolean
   pairSeedRefresh?: boolean
+  /** 自定义起始局面（BFEN 列表；旧调度器/未指定时缺失） */
+  startFens?: string[]
 }
 
 /** rating job 规格（调度器 RatingBody 回显，camelCase） */
@@ -415,6 +419,8 @@ export interface RatingSpecBody {
   sideA?: PlayerSpec | null
   sideB?: PlayerSpec | null
   scenario: string
+  /** 自定义起始局面（BFEN 列表；旧调度器/未指定时缺失） */
+  startFens?: string[]
 }
 
 /** rating job 附带的 SPRT / 对战统计（调度器 RatingStatsView，camelCase） */

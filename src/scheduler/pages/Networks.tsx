@@ -6,6 +6,7 @@ import Form from 'antd/es/form'
 import Input from 'antd/es/input'
 import Modal from 'antd/es/modal'
 import Select from 'antd/es/select'
+import Space from 'antd/es/space'
 import Table from 'antd/es/table'
 import Tag from 'antd/es/tag'
 import Typography from 'antd/es/typography'
@@ -37,6 +38,25 @@ export default function Networks() {
   const [registerOpen, setRegisterOpen] = useState(false)
   const [registerBusy, setRegisterBusy] = useState(false)
   const [form] = Form.useForm<RegisterForm>()
+  const [downloadingSha, setDownloadingSha] = useState<string | null>(null)
+
+  /** 取预签名下载 URL 后触发浏览器下载（对象存储直连） */
+  const download = async (n: Network) => {
+    setDownloadingSha(n.sha)
+    try {
+      const res = await api.networkDownload(n.sha)
+      const a = document.createElement('a')
+      a.href = res.url
+      a.download = res.objectKey.split('/').pop() || `${n.sha}.${n.format ?? ''}`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    } catch (e) {
+      message.error(`获取下载链接失败：${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setDownloadingSha(null)
+    }
+  }
 
   const register = async () => {
     const values = await form.validateFields()
@@ -80,7 +100,19 @@ export default function Networks() {
       render: (v: string) => <Tag color={statusColor[v] ?? 'default'}>{v}</Tag>,
     },
     { title: '登记时间', dataIndex: 'createdAt', render: (v: number) => fmtTime(v) },
+    { title: '格式', dataIndex: 'format', render: (v: string) => v || '-' },
     { title: '备注', dataIndex: 'notes', render: (v: string) => v || '-' },
+    {
+      key: 'actions',
+      title: '操作',
+      render: (_: unknown, n: Network) => (
+        <Space size={0}>
+          <Button type="link" size="small" loading={downloadingSha === n.sha} onClick={() => void download(n)}>
+            下载
+          </Button>
+        </Space>
+      ),
+    },
   ]
 
   if (error) {
