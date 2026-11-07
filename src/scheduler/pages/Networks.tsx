@@ -38,24 +38,16 @@ export default function Networks() {
   const [registerOpen, setRegisterOpen] = useState(false)
   const [registerBusy, setRegisterBusy] = useState(false)
   const [form] = Form.useForm<RegisterForm>()
-  const [downloadingSha, setDownloadingSha] = useState<string | null>(null)
 
-  /** 取预签名下载 URL 后触发浏览器下载（对象存储直连） */
-  const download = async (n: Network) => {
-    setDownloadingSha(n.sha)
-    try {
-      const res = await api.networkDownload(n.sha)
-      const a = document.createElement('a')
-      a.href = res.url
-      a.download = res.objectKey.split('/').pop() || `${n.sha}.${n.format ?? ''}`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-    } catch (e) {
-      message.error(`获取下载链接失败：${e instanceof Error ? e.message : String(e)}`)
-    } finally {
-      setDownloadingSha(null)
-    }
+  /** 触发浏览器下载：走调度器同源代理端点（服务端预签名拉取对象存储），
+   *  规避浏览器直连存储端点的系统代理 502 与 HTTP 明文下载告警 */
+  const download = (n: Network) => {
+    const a = document.createElement('a')
+    a.href = `/api/networks/${encodeURIComponent(n.sha)}/download/file`
+    a.download = `${n.sha}.${n.format ?? ''}`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
   }
 
   const register = async () => {
@@ -107,7 +99,7 @@ export default function Networks() {
       title: '操作',
       render: (_: unknown, n: Network) => (
         <Space size={0}>
-          <Button type="link" size="small" loading={downloadingSha === n.sha} onClick={() => void download(n)}>
+          <Button type="link" size="small" onClick={() => download(n)}>
             下载
           </Button>
         </Space>
