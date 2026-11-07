@@ -72,6 +72,11 @@ function winnerTag(w: number | null | undefined) {
   return <Tag color="default">和棋</Tag>
 }
 
+/** 诊断数值渲染：null / undefined / NaN 显示占位符（标签包缺失时后端诊断字段为 null） */
+function fmtNum(v: number | null | undefined, digits = 4): string {
+  return v === null || v === undefined || Number.isNaN(v) ? '—' : v.toFixed(digits)
+}
+
 export default function Replay() {
   const [params] = useSearchParams()
   const episodeId = params.get('episode')
@@ -172,15 +177,25 @@ export default function Replay() {
     return m
   }, [step, dims])
 
-  // 走势序列：红方视角搜索值 + 暗子数（截至当前 cursor）。
+  // 走势序列：红方视角搜索值 + 暗子数（截至当前 cursor；标签包缺失时诊断值为 null，过滤掉）。
   const valueSeries = useMemo(() => {
     if (!game) return []
-    return game.moves.slice(0, cursor).map((m) => m.searchValue * (m.player === 'Red' ? 1 : -1))
+    return game.moves
+      .slice(0, cursor)
+      .filter((m) => m.searchValue !== null && m.searchValue !== undefined && !Number.isNaN(m.searchValue))
+      .map((m) => m.searchValue! * (m.player === 'Red' ? 1 : -1))
   }, [game, cursor])
   const hiddenSeries = useMemo(() => {
     if (!game) return []
-    return game.moves.slice(0, cursor).map((m) => m.hiddenCount)
+    return game.moves
+      .slice(0, cursor)
+      .filter((m) => m.hiddenCount !== null && m.hiddenCount !== undefined)
+      .map((m) => m.hiddenCount!)
   }, [game, cursor])
+  // 全局诊断统计（标签包缺失时为 null）：先提取为局部常量，保证 JSX 闭包内的类型收窄。
+  const agree: number | null = game?.labelerAgree ?? null
+  const agreeTotal: number | null = game?.labelerTotal ?? null
+  const explCount: number | null = game?.explCount ?? null
 
   if (!episodeId) {
     return <Alert type="info" showIcon message="缺少 episode 参数" description="从对局记录列表页的「回放」入口进入。" />
@@ -216,6 +231,15 @@ export default function Replay() {
     >
       {list && list.kind === 'resnet' && (
         <Alert type="warning" showIcon message="该对象为 ResNet/MCTS 记录，NNUE 专属诊断（教师标注等）不可用" style={{ marginBottom: 12 }} />
+      )}
+      {game?.labelsMissing && (
+        <Alert
+          type="info"
+          showIcon
+          message="该对局无对局标签包"
+          description="教师策略与搜索诊断不可用，诊断网格与走势图降级显示；棋盘回放不受影响。"
+          style={{ marginBottom: 12 }}
+        />
       )}
       {gameError && <Alert type="error" showIcon message="重建对局失败" description={gameError} />}
       <div className="replay-layout">
@@ -363,11 +387,17 @@ export default function Replay() {
                 </Card>
               )}
               <Card size="small" title="搜索值走势（红方视角，教师根值）">
-                <Sparkline values={valueSeries} color="#1677ff" zeroLine />
-                <div className="replay-chart-label">
-                  暗子数走势（步前，记录值 {step ? step.hiddenCount : '—'}）
-                </div>
-                <Sparkline values={hiddenSeries} color="#8b5cf6" />
+                {game.labelsMissing ? (
+                  <Typography.Text type="secondary">无诊断数据（该对局无对局标签包）</Typography.Text>
+                ) : (
+                  <>
+                    <Sparkline values={valueSeries} color="#1677ff" zeroLine />
+                    <div className="replay-chart-label">
+                      暗子数走势（步前，记录值 {step ? (step.hiddenCount ?? '—') : '—'}）
+                    </div>
+                    <Sparkline values={hiddenSeries} color="#8b5cf6" />
+                  </>
+                )}
               </Card>
               {step && (
                 <Card size="small" title="当前手">
@@ -382,37 +412,37 @@ export default function Replay() {
                   </Space>
                   <div className="replay-diag-grid" style={{ marginTop: 8 }}>
                     <span className="k">搜索根值</span>
-                    <span className="v">{step.searchValue.toFixed(4)}</span>
+                    <span className="v">{fmtNum(step.searchValue)}</span>
                     <span className="k">行棋方值</span>
-                    <span className="v">{step.playerValue.toFixed(4)}</span>
+                    <span className="v">{fmtNum(step.playerValue)}</span>
                     <span className="k">搜索深度</span>
-                    <span className="v">{step.searchDepth || '—'}</span>
+                    <span className="v">{step.searchDepth ?? '—'}</span>
                     <span className="k">节点数</span>
-                    <span className="v">{step.searchNodes ? step.searchNodes.toLocaleString() : '—'}</span>
+                    <span className="v">{step.searchNodes != null ? step.searchNodes.toLocaleString() : '—'}</span>
                     <span className="k">暗子数</span>
-                    <span className="v">{step.hiddenCount || '—'}</span>
+                    <span className="v">{step.hiddenCount ?? '—'}</span>
                     <span className="k">探索损失</span>
-                    <span className={'v' + (step.chosenValueGap > 0 ? ' replay-diag-warn' : '')}>
-                      {step.chosenValueGap ? step.chosenValueGap.toFixed(4) : '—'}
+                    <span className={'v' + (step.chosenValueGap != null && step.chosenValueGap > 0 ? ' replay-diag-warn' : '')}>
+                      {step.chosenValueGap ? fmtNum(step.chosenValueGap) : '—'}
                     </span>
                     <span className="k">探索采样</span>
-                    <span className={'v' + (step.explRandom ? ' replay-diag-warn' : '')}>
-                      {step.explRandom ? '是（偏离 argmax）' : '否'}
+                    <span className={'v' + (step.explRandom === true ? ' replay-diag-warn' : '')}>
+                      {step.explRandom == null ? '—' : step.explRandom ? '是（偏离 argmax）' : '否'}
                     </span>
                     <span className="k">教师 argmax</span>
                     <span
-                      className={'v' + (step.labelerAction !== null && step.labelerAction !== step.action ? ' replay-diag-warn' : '')}
+                      className={'v' + (step.labelerAction != null && step.labelerAction !== step.action ? ' replay-diag-warn' : '')}
                     >
-                      {step.labelerAction === null ? '—' : `${step.labelerAction}${step.labelerAction !== step.action ? ' ≠ 实际' : ' = 实际'}`}
+                      {step.labelerAction == null ? '—' : `${step.labelerAction}${step.labelerAction !== step.action ? ' ≠ 实际' : ' = 实际'}`}
                     </span>
                     <span className="k">教师回退</span>
-                    <span className={'v' + (step.labelerFallback ? ' replay-diag-warn' : '')}>
-                      {step.labelerFallback ? '是（标签回退）' : '否'}
+                    <span className={'v' + (step.labelerFallback === true ? ' replay-diag-warn' : '')}>
+                      {step.labelerFallback == null ? '—' : step.labelerFallback ? '是（标签回退）' : '否'}
                     </span>
                     <span className="k">策略动作数</span>
                     <span className="v">{step.policyActions?.length ?? '—'}</span>
                   </div>
-                  {step.policyValues && step.policyValues.length > 0 && (
+                  {step.policyActions && step.policyValues && step.policyValues.length > 0 && (
                     <div style={{ marginTop: 6 }}>
                       <Typography.Text type="secondary" style={{ fontSize: 11 }}>
                         教师根策略 Top-5（值，行棋方视角；棋盘绿框 = 热力）
@@ -432,21 +462,21 @@ export default function Replay() {
                   )}
                 </Card>
               )}
-              {game && game.labelerTotal > 0 && (
+              {agree !== null && agreeTotal !== null && agreeTotal > 0 && (
                 <Card size="small" title="决策一致性（全局）">
                   <Progress
-                    percent={Math.round(game.labelerAgree * 100)}
-                    format={() => `${Math.round(game.labelerAgree * 100)}%`}
-                    status={game.labelerAgree < 0.8 ? 'exception' : 'normal'}
+                    percent={Math.round(agree * 100)}
+                    format={() => `${Math.round(agree * 100)}%`}
+                    status={agree < 0.8 ? 'exception' : 'normal'}
                   />
                   <Typography.Text type="secondary">
-                    教师 argmax 与实际落子同意率（{game.labelerTotal} 个有效步）；低一致率 + 高探索损失 = 采样噪声大。
+                    教师 argmax 与实际落子同意率（{agreeTotal} 个有效步）；低一致率 + 高探索损失 = 采样噪声大。
                   </Typography.Text>
                 </Card>
               )}
-              {game && game.explCount > 0 && (
+              {explCount !== null && explCount > 0 && (
                 <Card size="small" title="探索采样（全局）">
-                  <Statistic value={game.explCount} suffix={`/ ${game.steps} 步`} valueStyle={{ fontSize: 20 }} />
+                  <Statistic value={explCount} suffix={`/ ${game.steps} 步`} valueStyle={{ fontSize: 20 }} />
                   <Typography.Text type="secondary">
                     因探索采样（温度 softmax）偏离搜索 argmax 的步数；这类步的价值/策略标签噪声更大，训练侧可据此降权或过滤。
                   </Typography.Text>

@@ -267,16 +267,17 @@ export interface ReplayStep {
   hiddenBag: HiddenBag
   /** 局面来源：恒为 snapshot = 步前快照精确重建（旧数据动作推断已移除） */
   boardSource: 'snapshot'
-  /** 每步诊断（教师标注器 / 搜索观测；旧数据为 0 / null） */
-  searchValue: number
-  playerValue: number
-  hiddenCount: number
-  searchDepth: number
-  searchNodes: number
-  chosenValueGap: number
-  /** 因探索采样偏离产方搜索 argmax 的动作（旧数据恒 false） */
-  explRandom: boolean
-  labelerFallback: boolean
+  /** 每步诊断（教师标注器 / 搜索观测；旧数据为 0，标签包缺失时为 null） */
+  searchValue: number | null
+  playerValue: number | null
+  hiddenCount: number | null
+  searchDepth: number | null
+  searchNodes: number | null
+  chosenValueGap: number | null
+  /** 因探索采样偏离产方搜索 argmax 的动作（旧数据恒 false，标签包缺失时为 null） */
+  explRandom: boolean | null
+  /** 教师标注回退（标签包缺失时为 null） */
+  labelerFallback: boolean | null
   labelerAction: number | null
   policyActions: number[] | null
   policyValues: number[] | null
@@ -308,11 +309,14 @@ export interface ReplayGame {
   finalShown: boolean[]
   finalBag: HiddenBag
   moves: ReplayStep[]
-  /** 教师 argmax 与实际动作的同意率（labeler_actions 有效步口径） */
-  labelerAgree: number
-  labelerTotal: number
-  /** 探索采样偏离 argmax 的步数（expl_random = 1；旧数据恒 0） */
-  explCount: number
+  /** 标签包缺失标记：true = 该对局无对局标签包，诊断字段全为 null（教师策略与搜索诊断不可用） */
+  labelsMissing?: boolean
+  /** 教师 argmax 与实际动作的同意率（labeler_actions 有效步口径；标签包缺失时为 null） */
+  labelerAgree: number | null
+  /** 有效步总数（标签包缺失时为 null） */
+  labelerTotal: number | null
+  /** 探索采样偏离 argmax 的步数（expl_random = 1；旧数据恒 0，标签包缺失时为 null） */
+  explCount: number | null
 }
 
 /** 可远程调节的训练超参类型（与调度器 trainConfigSpecs 的 kind 对应） */
