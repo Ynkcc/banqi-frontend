@@ -1018,6 +1018,8 @@ button.mini {
   background: #fbf9f4;
   padding: 12px;
   overflow-y: auto;
+  /* 预留滚动条槽位：选中态内容增减不再挤压内容宽度，棋盘尺寸保持稳定不变形 */
+  scrollbar-gutter: stable;
   display: flex;
   flex-direction: column;
   gap: 8px;
