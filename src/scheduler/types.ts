@@ -11,7 +11,6 @@ export interface Network {
   sha: string
   parentSha: string
   createdAt: number
-  isBest: boolean
   status: string
   notes: string
   /** 权重文件格式（nnue/onnx/pt）；旧调度器可能缺失 */

@@ -18,7 +18,6 @@ import type { Network } from '../types'
 import { usePoll } from '../usePoll'
 
 const statusColor: Record<string, string> = {
-  best: 'green',
   candidate: 'blue',
   archived: 'default',
   rejected: 'red',

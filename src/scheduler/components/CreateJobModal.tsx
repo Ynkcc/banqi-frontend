@@ -108,7 +108,7 @@ export default function CreateJobModal({
 
   const networkOptions = networks.map((n) => ({
     value: n.sha,
-    label: `${shortSha(n.sha, 10)}${n.isBest ? ' · best' : ''}${n.notes ? ` · ${n.notes}` : ''}`,
+    label: `${shortSha(n.sha, 10)}${n.notes ? ` · ${n.notes}` : ''}`,
   }))
 
   const playerCard = (

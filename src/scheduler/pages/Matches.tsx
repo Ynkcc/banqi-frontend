@@ -132,7 +132,7 @@ export default function Matches() {
       render: (v: string) => <Typography.Text code>{shortSha(v)}</Typography.Text>,
     },
     {
-      title: '对手 best',
+      title: '对手',
       dataIndex: 'opponent',
       render: (v: string) => <Typography.Text code>{shortSha(v)}</Typography.Text>,
     },
