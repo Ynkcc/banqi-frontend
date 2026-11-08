@@ -300,15 +300,19 @@ async function doMove(action: number) {
   const prev = store.state;
   store.busy = true;
   try {
+    // /move 只落玩家这一步并立即返回：先上盘渲染，不等 AI 应手
     const result = await api.stepGame(action);
     await applyStep(prev, result);
-    // server 在 /move 内已代跑对方策略回合，此处附带其搜索统计
-    if (result.mcts_stats) logMctsStats(result.mcts_stats);
-    if (result.nnue_stats) logNnueStats(result.nnue_stats);
   } catch (e) {
     toast.error('操作失败: ' + e);
+    return;
   } finally {
     store.busy = false;
+  }
+  // 落子已即时上盘；对方为托管方（can_run）时在此触发其策略回合，
+  // 搜索期间 runStep 自行置 busy，棋盘上玩家的落子已可见
+  if (store.state?.can_run) {
+    void runStep();
   }
 }
 
