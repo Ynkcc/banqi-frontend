@@ -42,11 +42,14 @@ function fmtNodes(n: number): string {
 }
 
 function edgeLabel(e: ExEdge): string {
+  const pct = `${(e.chance_prob * 100).toFixed(0)}%`;
+  // 机会动作分两类：翻子（翻开位置上的暗子）与吃暗子（如炮击暗子）
+  const verb = e.is_flip ? '翻' : '击';
   if (e.is_outcome) {
     const piece = outcomeRevealedOf(e);
-    return piece ? `翻 ${pieceText(piece)} ${(e.chance_prob * 100).toFixed(0)}%` : `翻 ${(e.chance_prob * 100).toFixed(0)}%`;
+    return piece ? `${verb} ${pieceText(piece)} ${pct}` : `${verb} ${pct}`;
   }
-  if (e.is_chance) return `翻 #${e.action}`;
+  if (e.is_chance) return `${verb} #${e.action}`;
   return `#${e.action}`;
 }
 
@@ -236,14 +239,18 @@ const inspectorBoard = computed(() => {
     const board = [...anchor.state.board];
     const revealed =
       anchor.chance_outcomes.find((o) => o.child_id === store.selectedId)?.revealed ?? null;
-    for (const c of anchor.move_coords) board[c] = revealed ?? 'Hidden';
+    // 只揭示被操作格（吃暗子时 move_coords 末位为目标格，攻击者格保持原样）
+    const target = anchor.move_coords[anchor.move_coords.length - 1];
+    if (target !== undefined) board[target] = revealed ?? 'Hidden';
     return { ...anchor, state: { ...anchor.state, board } };
   }
   const b = store.selectedBoard;
   if (!b) return store.focusBoard;
   if (b.chance_outcomes.length > 0 && b.move_coords.length > 0) {
     const board = [...b.state.board];
-    for (const c of b.move_coords) board[c] = 'Hidden';
+    // 只把被操作格视为暗子（吃暗子时攻击者格保持可见）
+    const target = b.move_coords[b.move_coords.length - 1];
+    if (target !== undefined) board[target] = 'Hidden';
     return { ...b, state: { ...b.state, board } };
   }
   return b;
@@ -258,7 +265,8 @@ const boardCaption = computed(() => {
     const o = anchor.chance_outcomes.find((x) => x.child_id === store.selectedId);
     if (o) {
       const piece = o.revealed ? pieceText(o.revealed) : '？';
-      return `翻开前形态 · 选中分支翻出 ${piece}（${(o.prob * 100).toFixed(0)}%）`;
+      const verb = store.selectedDetail?.is_flip === false ? '击出' : '翻出';
+      return `翻开前形态 · 选中分支${verb} ${piece}（${(o.prob * 100).toFixed(0)}%）`;
     }
     return '翻开前形态';
   }
