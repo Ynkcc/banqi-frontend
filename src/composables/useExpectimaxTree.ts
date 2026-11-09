@@ -17,6 +17,21 @@ export const EX_SORT_OPTIONS: { value: ExSortMode; label: string }[] = [
   { value: 'action-desc', label: '着法 # ↓' },
 ];
 
+/** 剪枝原因 → 展示标签（对应核心库 st_mark_pruned 的 reason） */
+export const PRUNE_REASON_LABELS: Record<string, string> = {
+  beta_cut: 'β截断',
+  futility: '静态剪',
+  flip_once: '翻子限',
+  q_topk: '扇出限',
+  q_delta: 'δ剪',
+  q_see: 'SEE剪',
+};
+
+export function pruneReasonLabel(reason: string | null | undefined): string | null {
+  if (!reason) return null;
+  return PRUNE_REASON_LABELS[reason] ?? reason;
+}
+
 /** treemap 瓦片模型（焦点节点的直接子节点） */
 export interface ExTile {
   id: number;
@@ -25,6 +40,10 @@ export interface ExTile {
   value: number;
   flag: string;
   mark: string | null;
+  /** 该分支因剪枝而终止（未实际搜索） */
+  pruned: boolean;
+  /** 剪枝原因原始标识符 */
+  pruneReason: string | null;
   /** 子树消耗的预算（tick 数） */
   spent: number;
   childCount: number;
@@ -260,9 +279,13 @@ function tileOf(e: ExEdge): ExTile {
   return {
     id: e.child_id,
     edge: e,
-    value: e.value,
+    // 机会节点（翻子）在窗口截断时 value 是边界值（兄弟节点常相同），
+    // 展示以期望值为准（父视角 = -exp）
+    value: e.exp_value != null ? -e.exp_value : e.value,
     flag: e.flag,
     mark: e.mark,
+    pruned: e.pruned,
+    pruneReason: e.prune_reason ?? null,
     spent: e.spent_nodes,
     childCount: e.child_count,
   };
@@ -291,7 +314,8 @@ function pvIds(): Set<number> {
     const edges = childrenCache.get(id);
     if (!edges || edges.length === 0) break;
     const exact = edges.filter((e) => e.flag === 'exact' && !e.is_outcome);
-    const pool = exact.length > 0 ? exact : edges;
+    const searched = edges.filter((e) => !e.pruned && !e.is_outcome);
+    const pool = exact.length > 0 ? exact : searched.length > 0 ? searched : edges;
     id = pool.reduce((best, e) => (e.value > best.value ? e : best)).child_id;
   }
   return pv;
