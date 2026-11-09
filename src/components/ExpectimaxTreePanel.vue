@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watchEffect, watch } from 'vue';
 import type { ExEdge } from '../api/types';
-import type { ExAggregate, ExRect, ExTile } from '../composables/useExpectimaxTree';
+import type { ExRect, ExTile } from '../composables/useExpectimaxTree';
 import {
   EX_SORT_OPTIONS,
-  treemapLayout,
   useExpectimaxTree,
 } from '../composables/useExpectimaxTree';
 import { outcomeRevealedOf, pruneReasonLabel } from '../composables/useExpectimaxTree';
 import { useGame } from '../composables/useGame';
-import { pieceText } from '../domain/pieces';
+import { pieceCampText } from '../domain/pieces';
 import BoardGrid from './BoardGrid.vue';
 
 const emit = defineEmits<{ close: [] }>();
@@ -47,7 +46,7 @@ function edgeLabel(e: ExEdge): string {
   const verb = e.is_flip ? '翻' : '击';
   if (e.is_outcome) {
     const piece = outcomeRevealedOf(e);
-    return piece ? `${verb} ${pieceText(piece)} ${pct}` : `${verb} ${pct}`;
+    return piece ? `${verb} ${pieceCampText(piece)} ${pct}` : `${verb} ${pct}`;
   }
   if (e.is_chance) return `${verb} #${e.action}`;
   return `#${e.action}`;
@@ -61,7 +60,6 @@ function isChosen(r: RenderTile): boolean {
 }
 
 function tileBg(r: RenderTile): string {
-  if (r.kind === 'agg') return 'rgba(138, 131, 120, 0.12)';
   const t = r.tile;
   // 剪枝分支：灰色斜纹（未实际搜索，无价值信息）
   if (t.pruned) {
@@ -97,9 +95,7 @@ watchEffect(() => {
 onBeforeUnmount(() => ro?.disconnect());
 
 interface RenderTile {
-  kind: 'tile' | 'agg';
   tile: ExTile;
-  agg: ExAggregate<ExTile> | null;
   rect: ExRect;
   share: number;
   showValue: boolean;
@@ -109,100 +105,31 @@ interface RenderTile {
 const rendered = computed<RenderTile[]>(() => {
   const info = store.rootInfo;
   if (!info || mapSize.w < 24 || mapSize.h < 24) return [];
-  const view = focusChildren();
+  const tiles = focusChildren().tiles;
   const total = focusSpent();
+  const n = tiles.length;
+  if (n === 0) return [];
 
-  // 剪枝终止的叶子分支（零预算、不可下钻）：不参与面积分配（会因权重 0
-  // 被小项聚合吞掉），改为底部条带中等宽展示，保证「因剪枝而终止的分支」可见。
-  const stripTiles = view.tiles.filter((t) => t.pruned && t.spent === 0 && t.childCount === 0);
-  const stripSet = new Set(stripTiles);
-  const mapTiles = view.tiles.filter((t) => !stripSet.has(t));
+  // 等分网格：所有子节点不折叠、不聚合，大小一致（不按预算占比）。
+  // 列数按容器纵横比选择，使格子尽量接近容器比例的均匀矩形。
+  const aspect = mapSize.w / mapSize.h;
+  const cols = Math.max(1, Math.ceil(Math.sqrt(n * aspect)));
+  const rows = Math.ceil(n / cols);
+  const cw = mapSize.w / cols;
+  const ch = mapSize.h / rows;
 
-  // 底部条带：等宽小格，最多 4 行，放不下的并入「＋N ✂」占位格
-  const stripCols = Math.max(1, Math.floor(mapSize.w / 72));
-  const stripRows = Math.min(4, Math.ceil(stripTiles.length / stripCols));
-  const stripCellH = 24;
-  const stripH = stripTiles.length > 0 ? stripRows * (stripCellH + 2) + 2 : 0;
-  const mapH = mapSize.h - stripH;
-
-  const { rects, aggregates } = treemapLayout(mapTiles, { x: 0, y: 0, w: mapSize.w, h: mapH }, {
-    weightOf: (t) => t.spent,
-    isLeaf: (t) => t.childCount === 0,
-    minElement: 32,
-    gap: 2,
-  });
   const out: RenderTile[] = [];
-  mapTiles.forEach((tile, i) => {
-    const rect = rects[i];
-    if (rect.w <= 0 || rect.h <= 0) return; // 已被聚合
+  tiles.forEach((tile, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
     out.push({
-      kind: 'tile',
       tile,
-      agg: null,
-      rect,
+      rect: { x: col * cw + 1, y: row * ch + 1, w: cw - 2, h: ch - 2 },
       share: total > 0 ? (tile.spent / total) * 100 : 0,
-      showValue: rect.h > 36 && rect.w > 64,
-      showBudget: rect.h > 54 && rect.w > 88,
+      showValue: ch > 36 && cw > 64,
+      showBudget: ch > 54 && cw > 88,
     });
   });
-  for (const agg of aggregates) {
-    out.push({
-      kind: 'agg',
-      tile: agg.members[0],
-      agg,
-      rect: agg.rect,
-      share: total > 0 ? (agg.weight / total) * 100 : 0,
-      showValue: false,
-      showBudget: false,
-    });
-  }
-  // 剪枝条带格子
-  const stripShown = Math.min(stripTiles.length, stripRows * stripCols);
-  const overflow = stripTiles.length - stripShown;
-  const cw = mapSize.w / stripCols;
-  stripTiles.slice(0, stripShown).forEach((tile, i) => {
-    out.push({
-      kind: 'tile',
-      tile,
-      agg: null,
-      rect: {
-        x: (i % stripCols) * cw,
-        y: mapH + Math.floor(i / stripCols) * (stripCellH + 2),
-        w: cw - 2,
-        h: stripCellH,
-      },
-      share: 0,
-      showValue: false,
-      showBudget: false,
-    });
-  });
-  if (overflow > 0) {
-    out.push({
-      kind: 'agg',
-      tile: stripTiles[stripShown],
-      agg: {
-        kind: 'more',
-        count: overflow,
-        weight: 0,
-        members: stripTiles.slice(stripShown),
-        rect: {
-          x: (stripShown % stripCols) * cw,
-          y: mapH + Math.floor(stripShown / stripCols) * (stripCellH + 2),
-          w: mapSize.w - (stripShown % stripCols) * cw - 2,
-          h: stripCellH,
-        },
-      },
-      rect: {
-        x: (stripShown % stripCols) * cw,
-        y: mapH + Math.floor(stripShown / stripCols) * (stripCellH + 2),
-        w: mapSize.w - (stripShown % stripCols) * cw - 2,
-        h: stripCellH,
-      },
-      share: 0,
-      showValue: false,
-      showBudget: false,
-    });
-  }
   return out;
 });
 
@@ -236,9 +163,6 @@ function tileStyle(r: RenderTile): Record<string, string> {
 }
 
 function tileClass(r: RenderTile): Record<string, boolean> {
-  if (r.agg) {
-    return { 'ex-tile': true, 'is-agg': true, [`is-${r.agg.kind}`]: true };
-  }
   const t = r.tile;
   return {
     'ex-tile': true,
@@ -254,24 +178,11 @@ function tileClass(r: RenderTile): Record<string, boolean> {
 }
 
 function tileTitle(r: RenderTile): string {
-  if (r.agg) {
-    if (r.agg.kind === 'more' && r.agg.members[0]?.pruned) return `＋${r.agg.count} 剪枝`;
-    return r.agg.kind === 'small' ? `小项 ×${r.agg.count}` : `＋${r.agg.count} 项`;
-  }
   const label = edgeLabel(r.tile.edge);
   return r.tile.pruned ? `✂ ${label}` : label;
 }
 
 function tileTooltip(r: RenderTile): string {
-  if (r.agg) {
-    if (r.agg.kind === 'more' && r.agg.members[0]?.pruned) {
-      return `＋${r.agg.count} 条剪枝分支（底部条带放不下）· 单击首个成员查看`;
-    }
-    return (
-      (r.agg.kind === 'small' ? `小项 ×${r.agg.count}` : `＋${r.agg.count} 项`) +
-      ` · 子树预算 ${fmtNodes(r.agg.weight)}（${r.share.toFixed(1)}%）· 太小无法单独显示`
-    );
-  }
   const cut = r.tile.pruned
     ? ` · ✂ 剪枝终止（${pruneReasonLabel(r.tile.pruneReason) ?? r.tile.pruneReason}，未实际搜索）`
     : '';
@@ -279,12 +190,11 @@ function tileTooltip(r: RenderTile): string {
 }
 
 function onTileClick(r: RenderTile) {
-  if (r.agg) return;
   toggleSelect(r.tile.id);
 }
 
 function onTileDblClick(r: RenderTile) {
-  if (r.agg || r.tile.childCount === 0) return;
+  if (r.tile.childCount === 0) return;
   void descend(r.tile.edge);
   void select(r.tile.id);
 }
@@ -351,7 +261,7 @@ const boardCaption = computed(() => {
   if (anchor) {
     const o = anchor.chance_outcomes.find((x) => x.child_id === store.selectedId);
     if (o) {
-      const piece = o.revealed ? pieceText(o.revealed) : '？';
+      const piece = o.revealed ? pieceCampText(o.revealed) : '？';
       const verb = store.selectedDetail?.is_flip === false ? '击出' : '翻出';
       return `翻开前形态 · 选中分支${verb} ${piece}（${(o.prob * 100).toFixed(0)}%）`;
     }
@@ -424,36 +334,28 @@ function badge(t: ExTile): string {
           </div>
           <template v-else>
           <div
-            v-for="(r, ri) in rendered"
-            :key="r.agg ? `agg-${r.agg.kind}-${ri}` : r.tile.id"
+            v-for="r in rendered"
+            :key="r.tile.id"
             :style="tileStyle(r)"
             :class="tileClass(r)"
             :title="tileTooltip(r)"
             @click="onTileClick(r)"
             @dblclick="onTileDblClick(r)"
           >
-            <span v-if="!r.agg && r.tile.childCount > 0" class="ex-tile-drill">▸</span>
+            <span v-if="r.tile.childCount > 0" class="ex-tile-drill">▸</span>
             <span class="ex-tile-title">{{ tileTitle(r) }}</span>
-            <template v-if="!r.agg">
-              <span v-if="r.showValue" class="ex-tile-value">
-                <span v-if="r.tile.pruned" class="ex-tile-pruned-tag">
-                  ✂ {{ pruneReasonLabel(r.tile.pruneReason) ?? '剪枝' }}
-                </span>
-                <span v-else :class="valueClass(r.tile.value)">
-                  {{ r.tile.value >= 0 ? '+' : '' }}{{ r.tile.value.toFixed(2) }}
-                </span>
-                <span class="ex-tile-flag">{{ badge(r.tile) }}</span>
+            <span v-if="r.showValue" class="ex-tile-value">
+              <span v-if="r.tile.pruned" class="ex-tile-pruned-tag">
+                ✂ {{ pruneReasonLabel(r.tile.pruneReason) ?? '剪枝' }}
               </span>
-              <span v-if="r.showBudget" class="ex-tile-budget">
-                {{ fmtNodes(r.tile.spent) }} · {{ r.share.toFixed(0) }}%
+              <span v-else :class="valueClass(r.tile.value)">
+                {{ r.tile.value >= 0 ? '+' : '' }}{{ r.tile.value.toFixed(2) }}
               </span>
-            </template>
-            <template v-else>
-              <span class="ex-tile-budget">
-                {{ fmtNodes(r.agg.weight) }} · {{ r.share.toFixed(0) }}%
-              </span>
-              <span class="ex-tile-hidden-note">太小，无法单独显示</span>
-            </template>
+              <span class="ex-tile-flag">{{ badge(r.tile) }}</span>
+            </span>
+            <span v-if="r.showBudget" class="ex-tile-budget">
+              {{ fmtNodes(r.tile.spent) }} · {{ r.share.toFixed(0) }}%
+            </span>
           </div>
           </template>
         </div>
@@ -462,14 +364,13 @@ function badge(t: ExTile): string {
       <aside class="mcts-inspector">
         <h4>节点检视</h4>
         <p class="ex-legend">
-          <span class="ex-legend-item">面积 = 子节点子树消耗的预算（线性映射）</span>
+          <span class="ex-legend-item">子节点等分区域（大小不按预算占比）</span>
           <span class="ex-legend-item"><span class="swatch pv" /> 主变例（精确链）</span>
           <span class="ex-legend-item"><span class="swatch chosen" /> 根选择</span>
           <span class="ex-legend-item"><span class="swatch chance" /> 机会边</span>
-          <span class="ex-legend-item">小项 / ＋N：太小的子节点聚合占位</span>
           <span class="ex-legend-item">= 精确 / ≥ 下界 / ≤ 上界 / TT 截断</span>
           <span class="ex-legend-item">
-            <span class="swatch pruned" /> 底部条带 / 斜纹灰 = 剪枝终止分支：β截断 / 静态剪 / 翻子限 / 扇出限 / δ / SEE
+            <span class="swatch pruned" /> 斜纹灰 = 剪枝终止分支：β截断 / 静态剪 / 翻子限 / 扇出限 / δ / SEE
           </span>
         </p>
         <p v-if="store.inspectorLoading && !store.selectedBoard" class="mcts-inspector-empty">
@@ -662,12 +563,6 @@ function badge(t: ExTile): string {
 .ex-tile.is-outcome {
   border-style: dotted;
 }
-.ex-tile.is-agg {
-  border-style: dashed;
-}
-.ex-tile.is-agg.is-more {
-  border-style: dotted;
-}
 .ex-tile-drill {
   position: absolute;
   right: 4px;
@@ -695,12 +590,6 @@ function badge(t: ExTile): string {
 .ex-tile-budget {
   font-size: 10px;
   color: #6f675a;
-  white-space: nowrap;
-  overflow: hidden;
-}
-.ex-tile-hidden-note {
-  font-size: 10px;
-  color: #8a8378;
   white-space: nowrap;
   overflow: hidden;
 }

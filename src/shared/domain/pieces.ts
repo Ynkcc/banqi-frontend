@@ -44,6 +44,14 @@ export function pieceText(slot: string): string {
   return meta ? meta[player === 'Red' ? 'red' : 'black'] : abbr
 }
 
+// pieceCampText 短码 → 带阵营前缀的汉字，如 "红車"/"黑馬"。
+// 車/馬 红黑同字，纯 pieceText 无法区分阵营，文字场景需显式标注。
+export function pieceCampText(slot: string): string {
+  const player = slotPlayer(slot)
+  if (!player) return pieceText(slot)
+  return (player === 'Red' ? '红' : '黑') + pieceText(slot)
+}
+
 // coordText 格子坐标标注（列字母 a.. + 行号 1..，两侧同口径）。
 export function coordText(idx: number, cols: number): string {
   return `${String.fromCharCode(97 + (idx % cols))}${Math.floor(idx / cols) + 1}`

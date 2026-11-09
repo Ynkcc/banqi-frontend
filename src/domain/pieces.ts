@@ -8,6 +8,7 @@ export {
   TYPE_BY_ABBR,
   slotPlayer,
   pieceText,
+  pieceCampText,
   coordText,
 } from '../shared/domain/pieces';
 
