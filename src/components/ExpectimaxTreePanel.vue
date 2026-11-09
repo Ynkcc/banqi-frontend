@@ -55,7 +55,7 @@ function edgeLabel(e: ExEdge): string {
 function isChosen(r: RenderTile): boolean {
   const info = store.rootInfo;
   return (
-    !!info && r.kind === 'tile' && !r.tile.edge.is_chance && r.tile.edge.action === info.chosen_action
+    !!info && !r.tile.edge.is_chance && r.tile.edge.action === info.chosen_action
   );
 }
 
