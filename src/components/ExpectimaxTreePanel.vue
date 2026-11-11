@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref, watchEffect, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watchEffect, watch } from 'vue';
 import type { ExEdge } from '../api/types';
 import type { ExRect, ExTile } from '../composables/useExpectimaxTree';
 import {
@@ -138,6 +138,14 @@ const pvSet = computed(() => (store.rootInfo ? pvIds() : new Set<number>()));
 const info = computed(() => store.rootInfo);
 const stats = computed(() => info.value?.stats ?? null);
 
+/** 叶评估器来源标签（rule = 规则评估器，nnue = NNUE 模型） */
+const engineLabel = computed(() => {
+  const e = stats.value?.engine;
+  if (e === 'rule') return '规则';
+  if (e === 'nnue') return 'NNUE';
+  return e ?? null;
+});
+
 const rootSpent = computed(() => info.value?.root.spent_nodes ?? 0);
 
 /** 焦点节点的自耗 = 子树预算 − 各子瓦片预算和 */
@@ -199,13 +207,19 @@ function onTileDblClick(r: RenderTile) {
   void select(r.tile.id);
 }
 
-// 棋盘更新且面板已有搜索树时刷新树（watch 避免因 refresh 自身赋值造成循环）
+// 棋盘更新后刷新搜索树（Expectimax 规则 / NNUE 策略走子均会存树；
+// 无树时 refresh 静默保持空态，不弹提示）
 watch(
   () => game.state,
   () => {
-    if (store.rootInfo) void refresh();
+    void refresh();
   },
 );
+
+// 面板挂载即拉取已有搜索树（上一次策略走子可能已产生，无需等下一步）
+onMounted(() => {
+  void refresh();
+});
 
 // 无选中项时懒加载焦点节点棋盘（根时即行动前局面）
 watchEffect(() => {
@@ -303,7 +317,7 @@ function badge(t: ExTile): string {
       </select>
       <span v-if="info" class="mcts-info">
         深度 {{ stats?.reached_depth }} / 节点 {{ stats?.nodes }} /
-        {{ stats?.elapsed_ms }}ms，选择 #{{ info.chosen_action }}
+        {{ stats?.elapsed_ms }}ms · 评估 {{ engineLabel }}，选择 #{{ info.chosen_action }}
       </span>
     </div>
 
@@ -330,7 +344,7 @@ function badge(t: ExTile): string {
       <div class="ex-map-col">
         <div ref="mapEl" class="mcts-tree-zone ex-map-zone">
           <div v-if="!info" class="mcts-empty">
-            暂无搜索树：让 NNUE 对手走一步，或点击「搜索」手动触发
+            暂无搜索树：让 Expectimax 对手（规则 / NNUE）走一步，或点击「搜索」手动触发
           </div>
           <template v-else>
           <div

@@ -124,7 +124,10 @@ async function refresh(): Promise<void> {
     void ensureFocusBoard();
   } catch (e) {
     store.rootInfo = null;
-    toast.info(String(e));
+    // 树不存在（对局中尚无 Expectimax 规则 / NNUE 策略走子）属正常空态，静默处理
+    if ((e as { code?: string } | null)?.code !== 'NNUE_TREE_MISSING') {
+      toast.info(String(e));
+    }
   }
 }
 
