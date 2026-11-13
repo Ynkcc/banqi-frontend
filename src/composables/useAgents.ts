@@ -14,10 +14,11 @@ import { api } from '../api/client';
 import type {
   AgentParamsCfg,
   AgentView,
-  NnueBudgetMode,
+  EngineBudgetMode,
   SlotKind,
   StrategyKind,
 } from '../api/types';
+import { normalizeBudgetMode } from '../api/types';
 import { strategyNeedsModel } from '../api/types';
 import { appendLog } from './useLogs';
 import { useToast } from './useToast';
@@ -30,14 +31,16 @@ interface AgentCreateForm {
   kind: SlotKind;
   modelFile: string;
   mctsSims: number;
-  engineBudget: number;
-  /** Expectimax（规则评估器）预算模式 */
-  engineBudgetMode: NnueBudgetMode;
-  engineDepth: number;
+  /** Expectimax（规则评估器）预算模式：depth | time */
+  engineBudgetMode: EngineBudgetMode;
+  /** 确定性搜索深度 */
+  engineDeterministicDepth: number;
+  /** chance 节点 outcome 展开深度（>0 递归展开，0 直接评估） */
+  engineChanceOutcomeDepth: number;
   engineTimeMs: number;
-  nnueBudgetMode: NnueBudgetMode;
-  nnueDepth: number;
-  nnueBudget: number;
+  nnueBudgetMode: EngineBudgetMode;
+  nnueDeterministicDepth: number;
+  nnueChanceOutcomeDepth: number;
   nnueTimeMs: number;
   searchTimeoutMs: number;
 }
@@ -69,13 +72,13 @@ const store = reactive<AgentsStore>({
     kind: 'ExpectimaxNnue',
     modelFile: '',
     mctsSims: 200,
-    engineBudget: 300000,
-    engineBudgetMode: 'nodes',
-    engineDepth: 8,
+    engineBudgetMode: 'depth',
+    engineDeterministicDepth: 8,
+    engineChanceOutcomeDepth: 1,
     engineTimeMs: 5000,
-    nnueBudgetMode: 'depth_nodes',
-    nnueDepth: 8,
-    nnueBudget: 200000,
+    nnueBudgetMode: 'depth',
+    nnueDeterministicDepth: 8,
+    nnueChanceOutcomeDepth: 1,
     nnueTimeMs: 5000,
     searchTimeoutMs: 60000,
   },
@@ -96,9 +99,9 @@ function formParams(form: AgentCreateForm): AgentParamsCfg {
   }
   if (form.kind === 'Expectimax') {
     return {
-      engine_budget: form.engineBudget,
       engine_budget_mode: form.engineBudgetMode,
-      engine_depth: form.engineDepth,
+      engine_deterministic_depth: form.engineDeterministicDepth,
+      engine_chance_outcome_depth: form.engineChanceOutcomeDepth,
       engine_time_ms: form.engineTimeMs,
       search_timeout_ms: form.searchTimeoutMs,
     };
@@ -106,8 +109,8 @@ function formParams(form: AgentCreateForm): AgentParamsCfg {
   if (form.kind === 'ExpectimaxNnue') {
     return {
       nnue_budget_mode: form.nnueBudgetMode,
-      nnue_depth: form.nnueDepth,
-      nnue_budget: form.nnueBudget,
+      nnue_deterministic_depth: form.nnueDeterministicDepth,
+      nnue_chance_outcome_depth: form.nnueChanceOutcomeDepth,
       nnue_time_ms: form.nnueTimeMs,
       search_timeout_ms: form.searchTimeoutMs,
     };
@@ -161,12 +164,17 @@ function draftOf(agent: AgentView): AgentParamsCfg {
   if (!store.drafts[agent.id]) {
     if (agent.kind === 'Expectimax') {
       // Expectimax（规则评估器）：编辑 engine_* 预算族
+      // （budget_mode 兼容读取旧值 "depth_nodes"/"nodes"，统一按 "depth" 处理）
       store.drafts[agent.id] = {
-        ...(agent.engine_budget !== undefined ? { engine_budget: agent.engine_budget } : {}),
         ...(agent.budget_mode
-          ? { engine_budget_mode: agent.budget_mode as NnueBudgetMode }
+          ? { engine_budget_mode: normalizeBudgetMode(agent.budget_mode) }
           : {}),
-        ...(agent.budget_depth !== undefined ? { engine_depth: agent.budget_depth } : {}),
+        ...(agent.deterministic_depth !== undefined
+          ? { engine_deterministic_depth: agent.deterministic_depth }
+          : {}),
+        ...(agent.chance_outcome_depth !== undefined
+          ? { engine_chance_outcome_depth: agent.chance_outcome_depth }
+          : {}),
         ...(agent.budget_time_ms !== undefined
           ? { engine_time_ms: agent.budget_time_ms }
           : {}),
@@ -177,10 +185,15 @@ function draftOf(agent: AgentView): AgentParamsCfg {
     } else {
       store.drafts[agent.id] = {
         ...(agent.mcts_sims !== undefined ? { mcts_sims: agent.mcts_sims } : {}),
-        ...(agent.engine_budget !== undefined ? { engine_budget: agent.engine_budget } : {}),
-        ...(agent.budget_mode ? { nnue_budget_mode: agent.budget_mode as NnueBudgetMode } : {}),
-        ...(agent.budget_depth !== undefined ? { nnue_depth: agent.budget_depth } : {}),
-        ...(agent.budget !== undefined ? { nnue_budget: agent.budget } : {}),
+        ...(agent.budget_mode
+          ? { nnue_budget_mode: normalizeBudgetMode(agent.budget_mode) }
+          : {}),
+        ...(agent.deterministic_depth !== undefined
+          ? { nnue_deterministic_depth: agent.deterministic_depth }
+          : {}),
+        ...(agent.chance_outcome_depth !== undefined
+          ? { nnue_chance_outcome_depth: agent.chance_outcome_depth }
+          : {}),
         ...(agent.budget_time_ms !== undefined ? { nnue_time_ms: agent.budget_time_ms } : {}),
         ...(agent.search_timeout_ms !== undefined
           ? { search_timeout_ms: agent.search_timeout_ms }

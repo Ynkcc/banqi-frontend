@@ -27,7 +27,7 @@ import type {
   MctsNodeDetail,
   MctsRootInfo,
   ModelList,
-  NnueBudgetMode,
+  EngineBudgetMode,
   OpeningScenarioCfg,
   ReplayResp,
   ScenariosResp,
@@ -41,11 +41,12 @@ import type {
   VariantScenarios,
 } from './types';
 
-/** NNUE 预算设置输入（setNnueSettings 统一入参；未给出的字段保持服务器当前值）。 */
+/** NNUE 预算设置输入（setNnueSettings 统一入参；未给出的字段保持服务器当前值）。
+ *  depth 模式 = 确定性深度 + chance outcome 展开深度；节点数输入已移除。 */
 export interface NnueSettingsInput {
-  mode?: NnueBudgetMode;
-  depth?: number;
-  budget?: number;
+  mode?: EngineBudgetMode;
+  deterministicDepth?: number;
+  chanceOutcomeDepth?: number;
   timeMs?: number;
   timeoutMs?: number;
 }
@@ -252,23 +253,16 @@ export const api = {
     });
     return resp.mctsSims;
   },
-  async setEngineBudget(budget: number): Promise<number> {
-    // PUT /api/settings 部分更新：仅调整 Expectimax 强引擎默认节点预算
-    const resp = await http<EngineSettings>('/api/settings', {
-      method: 'PUT',
-      body: JSON.stringify({ engineBudget: budget }),
-    });
-    return resp.engineBudget;
-  },
   async setNnueSettings(p: NnueSettingsInput): Promise<EngineSettings> {
-    // PUT /api/settings 部分更新：Expectimax 预算模式 / 深度 / 节点预算 /
-    // 时间预算 / 搜索硬超时（未给出的字段保持服务器当前值），返回钳制后的全量生效快照
+    // PUT /api/settings 部分更新：Expectimax 预算模式 / 确定性深度 /
+    // chance outcome 展开深度 / 时间预算 / 搜索硬超时（未给出的字段保持
+    // 服务器当前值），返回钳制后的全量生效快照
     return http<EngineSettings>('/api/settings', {
       method: 'PUT',
       body: JSON.stringify({
         ...(p.mode ? { nnueBudgetMode: p.mode } : {}),
-        ...(p.depth !== undefined ? { nnueDepth: p.depth } : {}),
-        ...(p.budget !== undefined ? { nnueBudget: p.budget } : {}),
+        ...(p.deterministicDepth !== undefined ? { nnueDeterministicDepth: p.deterministicDepth } : {}),
+        ...(p.chanceOutcomeDepth !== undefined ? { nnueChanceOutcomeDepth: p.chanceOutcomeDepth } : {}),
         ...(p.timeMs !== undefined ? { nnueTimeMs: p.timeMs } : {}),
         ...(p.timeoutMs !== undefined ? { searchTimeoutMs: p.timeoutMs } : {}),
       }),
@@ -372,13 +366,21 @@ export const api = {
 function paramsBody(p: AgentParamsCfg): Record<string, unknown> {
   return {
     ...(p.mcts_sims !== undefined ? { mctsSims: p.mcts_sims } : {}),
-    ...(p.engine_budget !== undefined ? { engineBudget: p.engine_budget } : {}),
     ...(p.engine_budget_mode ? { engineBudgetMode: p.engine_budget_mode } : {}),
-    ...(p.engine_depth !== undefined ? { engineDepth: p.engine_depth } : {}),
+    ...(p.engine_deterministic_depth !== undefined
+      ? { engineDeterministicDepth: p.engine_deterministic_depth }
+      : {}),
+    ...(p.engine_chance_outcome_depth !== undefined
+      ? { engineChanceOutcomeDepth: p.engine_chance_outcome_depth }
+      : {}),
     ...(p.engine_time_ms !== undefined ? { engineTimeMs: p.engine_time_ms } : {}),
     ...(p.nnue_budget_mode ? { nnueBudgetMode: p.nnue_budget_mode } : {}),
-    ...(p.nnue_depth !== undefined ? { nnueDepth: p.nnue_depth } : {}),
-    ...(p.nnue_budget !== undefined ? { nnueBudget: p.nnue_budget } : {}),
+    ...(p.nnue_deterministic_depth !== undefined
+      ? { nnueDeterministicDepth: p.nnue_deterministic_depth }
+      : {}),
+    ...(p.nnue_chance_outcome_depth !== undefined
+      ? { nnueChanceOutcomeDepth: p.nnue_chance_outcome_depth }
+      : {}),
     ...(p.nnue_time_ms !== undefined ? { nnueTimeMs: p.nnue_time_ms } : {}),
     ...(p.search_timeout_ms !== undefined ? { searchTimeoutMs: p.search_timeout_ms } : {}),
   };

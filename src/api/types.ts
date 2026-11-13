@@ -99,7 +99,15 @@ export function strategyNeedsModel(kind: StrategyKind): boolean {
 }
 
 /** Expectimax 搜索预算模式（与 banqi-app BudgetMode 契约一致）。 */
-export type NnueBudgetMode = 'nodes' | 'depth_nodes' | 'time';
+export type EngineBudgetMode = 'depth' | 'time';
+
+/**
+ * 兼容读取：旧合同 budget_mode 的 "depth_nodes"（深度+节点预算）与 "nodes"
+ * （纯节点预算）在新口径下统一按 "depth" 处理（节点预算已移除）。
+ */
+export function normalizeBudgetMode(v: string | undefined | null): EngineBudgetMode {
+  return v === 'time' ? 'time' : 'depth';
+}
 
 /** 值界类型：exact = 精确值，lower/upper = fail-high/low 界，unknown = 未完成节点。 */
 export type ExFlag = 'exact' | 'lower' | 'upper' | 'unknown';
@@ -137,16 +145,18 @@ export interface CreateAgentCfg {
   params?: AgentParamsCfg;
 }
 
-/** Agent 搜索参数（全字段可选，缺省取服务器当前默认值；实时调整用同一形状）。 */
+/** Agent 搜索参数（全字段可选，缺省取服务器当前默认值；实时调整用同一形状）。
+ *  预算口径：budget_mode = "depth" | "time"；depth 模式用确定性深度 +
+ *  chance outcome 展开深度两个参数，节点数输入已移除。 */
 export interface AgentParamsCfg {
   mcts_sims?: number;
-  engine_budget?: number;
-  engine_budget_mode?: NnueBudgetMode;
-  engine_depth?: number;
+  engine_budget_mode?: EngineBudgetMode;
+  engine_deterministic_depth?: number;
+  engine_chance_outcome_depth?: number;
   engine_time_ms?: number;
-  nnue_budget_mode?: NnueBudgetMode;
-  nnue_depth?: number;
-  nnue_budget?: number;
+  nnue_budget_mode?: EngineBudgetMode;
+  nnue_deterministic_depth?: number;
+  nnue_chance_outcome_depth?: number;
   nnue_time_ms?: number;
   search_timeout_ms?: number;
 }
