@@ -161,6 +161,8 @@ export interface EpisodePage {
   items: Episode[]
   nextBefore: number
   hasMore: boolean
+  /** 满足当前过滤条件的总条数（跳页用） */
+  total: number
 }
 
 /** —— match"对"级反查（/api/matches/{id}/pairs）—— */

@@ -107,9 +107,9 @@ export const api = {
     }),
   controlJob: (jobId: string, action: 'pause' | 'resume' | 'cancel') =>
     request<JobControlView>(`/api/jobs/${encodeURIComponent(jobId)}/${action}`, { method: 'POST' }),
-  episodes: (before: number, limit = 100, matchId?: number) =>
+  episodes: (before: number, limit = 100, matchId?: number, offset = 0) =>
     request<EpisodePage>(
-      `/api/episodes?before=${before}&limit=${limit}${matchId ? `&match=${matchId}` : ''}`,
+      `/api/episodes?before=${before}&limit=${limit}${matchId ? `&match=${matchId}` : ''}${offset > 0 ? `&offset=${offset}` : ''}`,
     ),
   /** 某 match 的"对"级六分类明细（LL/LD/DD/WL/DW/WW，候选视角） */
   matchPairs: (id: number | string) => request<MatchPairsPage>(`/api/matches/${id}/pairs`),

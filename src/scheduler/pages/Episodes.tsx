@@ -1,5 +1,4 @@
 import Alert from 'antd/es/alert'
-import Button from 'antd/es/button'
 import Card from 'antd/es/card'
 import Input from 'antd/es/input'
 import Space from 'antd/es/space'
@@ -14,8 +13,6 @@ import { fmtTime, kindTagColor, shortSha, winnerText } from '../format'
 import { resizableHeader, useColumnSettings } from '../hooks/useColumnSettings'
 import type { Episode, EpisodeGame, GameLookupItem } from '../types'
 import { usePoll } from '../usePoll'
-
-const limit = 100
 
 /** 换手标识：玩家 A（产数据方）是否执红。对内两局应互补。 */
 function aIsRedTag(aIsRed: boolean) {
@@ -220,10 +217,10 @@ export default function Episodes() {
   const [params, setParams] = useSearchParams()
   const matchFilter = Math.max(0, Math.trunc(Number(params.get('match')) || 0))
   const [page, setPage] = useState(1)
-  const [cursors, setCursors] = useState<number[]>([0])
-  const before = cursors[page - 1] ?? 0
+  const [pageSize, setPageSize] = useState(100)
+  const offset = (page - 1) * pageSize
   const { data, error, reload } = usePoll(
-    () => api.episodes(before, limit, matchFilter || undefined),
+    () => api.episodes(0, pageSize, matchFilter || undefined, offset),
     10000,
   )
   const { columns: episodeColumns, settings: episodeSettings } = useColumnSettings<Episode>('scheduler.episodes', columns)
@@ -237,19 +234,16 @@ export default function Episodes() {
   const [lookupErr, setLookupErr] = useState<string | null>(null)
   const [lookupLoading, setLookupLoading] = useState(false)
 
-  const goNext = () => {
-    const last = data?.items[data.items.length - 1]
-    if (!last || !data?.hasMore) return
-    setCursors([...cursors, last.id])
-    setPage(page + 1)
-  }
-
-  // match 过滤变化：重置分页游标并立即刷新
+  // match 过滤变化：重置页码并立即刷新
   useEffect(() => {
     setPage(1)
-    setCursors([0])
     void reload()
   }, [matchFilter, reload])
+
+  // 页码 / 每页条数变化：立即刷新
+  useEffect(() => {
+    void reload()
+  }, [page, pageSize, reload])
 
   const doLookup = (value: string) => {
     const seed = value.trim()
@@ -309,7 +303,7 @@ export default function Episodes() {
         size="small"
         title={
           <Space size={8}>
-            <span>{`对局记录（按 ID 倒序，第 ${page} 页，本页 ${data?.items.length ?? 0} 条；展开行可核对逐局换手与种子）`}</span>
+            <span>{`对局记录（按 ID 倒序，本页 ${data?.items.length ?? 0} 条；展开行可核对逐局换手与种子）`}</span>
             {matchFilter > 0 && (
               <Tag color="blue" closable onClose={() => setParams({})}>
                 仅 Match #{matchFilter}
@@ -317,29 +311,31 @@ export default function Episodes() {
             )}
           </Space>
         }
-        extra={
-          <Space>
-            {episodeSettings}
-            <Button size="small" disabled={page === 1} onClick={() => setPage(page - 1)}>
-              上一页
-            </Button>
-            <Button size="small" disabled={!data?.hasMore} onClick={goNext}>
-              下一页
-            </Button>
-          </Space>
-        }
+        extra={<Space>{episodeSettings}</Space>}
       >
         <Table<Episode>
           rowKey="id"
           size="small"
           columns={episodeColumns}
           dataSource={data?.items ?? []}
-          pagination={false}
           components={resizableHeader}
           scroll={{ x: 'max-content' }}
           expandable={{
             expandedRowRender: (record) => <ExpandedGames episode={record} />,
             rowExpandable: () => true,
+          }}
+          pagination={{
+            current: page,
+            pageSize,
+            total: data?.total ?? 0,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            pageSizeOptions: [20, 50, 100, 200],
+            showTotal: (t) => `共 ${t} 条`,
+            onChange: (p, ps) => {
+              setPage(p)
+              setPageSize(ps)
+            },
           }}
         />
       </Card>
