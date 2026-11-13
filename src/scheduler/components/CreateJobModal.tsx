@@ -105,6 +105,7 @@ export default function CreateJobModal({
   const seedKind = Form.useWatch('seedKind', form)
   const playerA = Form.useWatch('playerA', form)
   const playerB = Form.useWatch('playerB', form)
+  const disableSprt = Form.useWatch('disableSprt', form)
 
   const networkOptions = networks.map((n) => ({
     value: n.sha,
@@ -188,17 +189,26 @@ export default function CreateJobModal({
         body = { kind: 'collect', collect }
       } else {
         const v = await form.validateFields([...RATING_FIELDS])
-        if (v.sprtAlpha !== 0 && !(0 < v.sprtAlpha && v.sprtAlpha < 1)) {
-          message.error('SPRT alpha 必须在 (0,1)')
-          return
-        }
-        if (v.sprtBeta !== 0 && !(0 < v.sprtBeta && v.sprtBeta < 1)) {
-          message.error('SPRT beta 必须在 (0,1)')
-          return
-        }
-        if (v.sprtElo0 !== 0 && v.sprtElo1 !== 0 && v.sprtElo1 <= v.sprtElo0) {
-          message.error('SPRT elo1 必须大于 elo0')
-          return
+        const sprtDisabled = !!v.disableSprt
+        if (sprtDisabled) {
+          const tg = v.ratingTotalGames ?? 0
+          if (tg < 2 || tg % 2 !== 0) {
+            message.error('禁用 SPRT 提前判定时，目标局数必须 ≥2 且为偶数')
+            return
+          }
+        } else {
+          if (v.sprtAlpha !== 0 && !(0 < v.sprtAlpha && v.sprtAlpha < 1)) {
+            message.error('SPRT alpha 必须在 (0,1)')
+            return
+          }
+          if (v.sprtBeta !== 0 && !(0 < v.sprtBeta && v.sprtBeta < 1)) {
+            message.error('SPRT beta 必须在 (0,1)')
+            return
+          }
+          if (v.sprtElo0 !== 0 && v.sprtElo1 !== 0 && v.sprtElo1 <= v.sprtElo0) {
+            message.error('SPRT elo1 必须大于 elo0')
+            return
+          }
         }
         const rating: RatingSpecBody = {
           variant: '',
@@ -209,6 +219,7 @@ export default function CreateJobModal({
           sprtElo1: v.sprtElo1 ?? 0,
           sprtAlpha: v.sprtAlpha ?? 0,
           sprtBeta: v.sprtBeta ?? 0,
+          disableSprt: sprtDisabled,
           scenario: v.ratingScenario,
         }
         body = { kind: 'rating', rating }
@@ -265,6 +276,7 @@ export default function CreateJobModal({
           playerB: { kind: 'rule:capture_first' },
           ratingScenario: 'standard',
           ratingTotalGames: 0,
+          disableSprt: false,
           sprtElo0: 0,
           sprtElo1: 40,
           sprtAlpha: 0.05,
@@ -388,32 +400,40 @@ export default function CreateJobModal({
                 </Form.Item>
               </Col>
             </Row>
+            <Form.Item
+              name="disableSprt"
+              label="禁用 SPRT 提前判定"
+              valuePropName="checked"
+              tooltip="启用 SPRT 时按 LLR 提前判停；禁用后仅统计 LLR（回显 0），跑满目标局数以 cap 结论收尾"
+            >
+              <Switch />
+            </Form.Item>
             <Row gutter={12}>
               <Col span={8}>
-                <Form.Item name="ratingTotalGames" label="目标局数（0 = 仅 SPRT 判停）">
-                  <InputNumber min={0} step={2} style={{ width: '100%' }} />
+                <Form.Item name="ratingTotalGames" label={disableSprt ? '目标局数（≥2 且为偶数）' : '目标局数（0 = 仅 SPRT 判停）'}>
+                  <InputNumber min={disableSprt ? 2 : 0} step={2} style={{ width: '100%' }} />
                 </Form.Item>
               </Col>
               <Col span={8}>
                 <Form.Item name="sprtElo0" label="SPRT elo0">
-                  <InputNumber step={1} style={{ width: '100%' }} />
+                  <InputNumber step={1} style={{ width: '100%' }} disabled={disableSprt} />
                 </Form.Item>
               </Col>
               <Col span={8}>
                 <Form.Item name="sprtElo1" label="SPRT elo1">
-                  <InputNumber step={1} style={{ width: '100%' }} />
+                  <InputNumber step={1} style={{ width: '100%' }} disabled={disableSprt} />
                 </Form.Item>
               </Col>
             </Row>
             <Row gutter={12}>
               <Col span={8}>
                 <Form.Item name="sprtAlpha" label="SPRT α">
-                  <InputNumber step={0.01} style={{ width: '100%' }} />
+                  <InputNumber step={0.01} style={{ width: '100%' }} disabled={disableSprt} />
                 </Form.Item>
               </Col>
               <Col span={8}>
                 <Form.Item name="sprtBeta" label="SPRT β">
-                  <InputNumber step={0.01} style={{ width: '100%' }} />
+                  <InputNumber step={0.01} style={{ width: '100%' }} disabled={disableSprt} />
                 </Form.Item>
               </Col>
               <Col span={8}>

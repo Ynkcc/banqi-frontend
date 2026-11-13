@@ -417,6 +417,8 @@ export interface RatingSpecBody {
   sprtElo1: number
   sprtAlpha: number
   sprtBeta: number
+  /** 禁用 SPRT 提前判定（跑满目标局数后以 cap 结论收尾） */
+  disableSprt?: boolean
   sideA?: PlayerSpec | null
   sideB?: PlayerSpec | null
   scenario: string

@@ -19,6 +19,7 @@ const verdictColor: Record<string, string> = {
   accept: 'green',
   reject: 'red',
   continue: 'blue',
+  cap: 'purple',
 }
 
 /** 六类"对"结果桶（候选视角），顺序与列展示一致；W=候选胜 / L=负 / D=和 */
