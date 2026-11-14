@@ -35,11 +35,12 @@ interface AgentCreateForm {
   engineBudgetMode: EngineBudgetMode;
   /** 确定性搜索深度 */
   engineDeterministicDepth: number;
-  /** chance 节点 outcome 展开深度（>0 递归展开，0 直接评估） */
+  /** chance 节点展开深度：0 = 直接以 Q(s,a) 评估该局面；>0 = 递归展开全部 outcome（按确定性深度续搜，子树内 chance 以 depth-1 递归），叶子静态评估 = max_a Q(s,a) */
   engineChanceOutcomeDepth: number;
   engineTimeMs: number;
   nnueBudgetMode: EngineBudgetMode;
   nnueDeterministicDepth: number;
+  /** chance 节点展开深度（递归语义同 engineChanceOutcomeDepth） */
   nnueChanceOutcomeDepth: number;
   nnueTimeMs: number;
   searchTimeoutMs: number;
