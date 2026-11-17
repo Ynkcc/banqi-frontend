@@ -6,6 +6,7 @@ import { variantsReady } from '../domain/variants';
 import { useAgents } from '../composables/useAgents';
 import { useGame } from '../composables/useGame';
 import { useSettings } from '../composables/useSettings';
+import AgentWindow from './AgentWindow.vue';
 
 const {
   store,
@@ -134,23 +135,26 @@ function kindLabel(agent: AgentView): string {
     </div>
 
     <p v-if="store.agents.length === 0" class="hint">暂无 Agent，请在上方创建。</p>
+    <p v-else class="hint">已创建的 Agent 以浮动窗口展示，可拖动标题栏移动、点击「—」收起。</p>
 
-    <div v-for="agent in store.agents" :key="agent.id" class="agent-card">
-      <div class="agent-head">
-        <strong>{{ kindLabel(agent) }}</strong>
-        <span class="agent-meta">{{ agent.variant }}</span>
-        <span v-if="agent.model_file" class="agent-meta">{{ agent.model_file }}</span>
-        <span
-          v-if="boundAgent('red') === agent.id || boundAgent('black') === agent.id"
-          class="pill agent-bound"
-        >
-          托管中（{{ boundAgent('red') === agent.id ? '红方' : '黑方' }}）
-        </span>
-        <button class="danger" title="删除该 Agent" @click="remove(agent)">删除</button>
-      </div>
+    <!-- 每个已创建的 Agent 渲染为一个可拖动的浮动窗口 -->
+    <Teleport to="body">
+      <AgentWindow v-for="(agent, i) in store.agents" :key="agent.id" :index="i">
+        <template #head>
+          <strong>{{ kindLabel(agent) }}</strong>
+          <span class="agent-meta">{{ agent.variant }}</span>
+          <span v-if="agent.model_file" class="agent-meta">{{ agent.model_file }}</span>
+          <span
+            v-if="boundAgent('red') === agent.id || boundAgent('black') === agent.id"
+            class="pill agent-bound"
+          >
+            托管中（{{ boundAgent('red') === agent.id ? '红方' : '黑方' }}）
+          </span>
+          <button class="danger" title="删除该 Agent" @click="remove(agent)">删除</button>
+        </template>
 
-      <!-- 搜索配置：唯一可实时调整的字段 -->
-      <div class="agent-settings">
+        <!-- 搜索配置：唯一可实时调整的字段 -->
+        <div class="agent-settings">
         <label v-if="agent.mcts_sims !== undefined" class="field">
           <span>搜索次数</span>
           <input v-model.number="draftOf(agent).mcts_sims" type="number" min="1" />
@@ -242,7 +246,8 @@ function kindLabel(agent: AgentView): string {
         该 Agent 的变体（{{ agent.variant }}）与当前对局（{{ game.state?.variant }}）不一致，
         建议 / 单步 / 托管将被服务端拒绝。
       </p>
-    </div>
+      </AgentWindow>
+    </Teleport>
   </section>
 </template>
 
@@ -259,21 +264,6 @@ function kindLabel(agent: AgentView): string {
   padding: 8px;
   border: 1px dashed rgba(255, 255, 255, 0.18);
   border-radius: 8px;
-}
-.agent-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-}
-.agent-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 .agent-meta {
   font-size: 12px;
