@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import type { AgentView } from '../api/types';
+import type { AgentView, NnueGreedyAction } from '../api/types';
 import { strategyNeedsModel } from '../api/types';
 import { variantsReady } from '../domain/variants';
 import { useAgents } from '../composables/useAgents';
@@ -43,6 +43,18 @@ function boundAgent(side: 'red' | 'black'): string | undefined {
 
 function kindLabel(agent: AgentView): string {
   return AGENT_KINDS.find((k) => k.value === agent.kind)?.label ?? agent.kind;
+}
+
+/** 纯网络贪心（NnueGreedy）最近一次「建议」的逐分量明细（版本对齐才显示）。 */
+const greedyDetail = computed(() => {
+  const s = game.suggestion;
+  if (!s || !game.state || s.version !== game.state.version) return null;
+  return s.nnue_greedy ?? null;
+});
+
+function actionLabel(a: NnueGreedyAction): string {
+  if (a.is_flip) return `翻@${a.to}`;
+  return `${a.from}→${a.to}${a.is_capture ? '吃' : ''}`;
 }
 </script>
 
@@ -246,6 +258,48 @@ function kindLabel(agent: AgentView): string {
         该 Agent 的变体（{{ agent.variant }}）与当前对局（{{ game.state?.variant }}）不一致，
         建议 / 单步 / 托管将被服务端拒绝。
       </p>
+
+      <!-- 纯网络贪心：建议的 WDL/mw/ml 独立分量明细 -->
+      <div
+        v-if="agent.kind === 'NnueGreedy' && greedyDetail"
+        class="nnue-greedy-detail"
+      >
+        <p class="nnue-greedy-v">
+          V(s) = {{ greedyDetail.v.value.toFixed(4) }}
+          = p_w·mw − p_l·ml
+          = {{ greedyDetail.v.wdl[2].toFixed(3) }}·{{ greedyDetail.v.mw.toFixed(3) }}
+          − {{ greedyDetail.v.wdl[0].toFixed(3) }}·{{ greedyDetail.v.ml.toFixed(3) }}
+          <span class="nnue-greedy-probs">
+            （p_l {{ greedyDetail.v.wdl[0].toFixed(3) }} / p_d {{ greedyDetail.v.wdl[1].toFixed(3) }}
+            / p_w {{ greedyDetail.v.wdl[2].toFixed(3) }}）
+          </span>
+        </p>
+        <table class="nnue-greedy-table">
+          <thead>
+            <tr>
+              <th>动作</th>
+              <th>p_l</th><th>p_d</th><th>p_w</th>
+              <th>mw</th><th>ml</th><th>Q</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="a in greedyDetail.actions"
+              :key="a.action"
+              :class="{ best: a.action === game.suggestion?.action }"
+            >
+              <td>{{ actionLabel(a) }}</td>
+              <td>{{ a.q.wdl[0].toFixed(3) }}</td>
+              <td>{{ a.q.wdl[1].toFixed(3) }}</td>
+              <td>{{ a.q.wdl[2].toFixed(3) }}</td>
+              <td>{{ a.q.mw.toFixed(3) }}</td>
+              <td>{{ a.q.ml.toFixed(3) }}</td>
+              <td>{{ a.q.value.toFixed(4) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="hint">Q = p_w·mw − p_l·ml（合成前各独立项）；按 Q 降序，选中行 = 建议动作。</p>
+      </div>
       </AgentWindow>
     </Teleport>
   </section>
@@ -284,6 +338,41 @@ function kindLabel(agent: AgentView): string {
 }
 .hint.warn {
   color: #f7c06b;
+}
+.nnue-greedy-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.nnue-greedy-v {
+  margin: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.nnue-greedy-probs {
+  opacity: 0.7;
+}
+.nnue-greedy-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.nnue-greedy-table th,
+.nnue-greedy-table td {
+  padding: 2px 4px;
+  text-align: right;
+}
+.nnue-greedy-table th:first-child,
+.nnue-greedy-table td:first-child {
+  text-align: left;
+}
+.nnue-greedy-table thead th {
+  opacity: 0.7;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+.nnue-greedy-table tr.best {
+  background: rgba(102, 187, 106, 0.18);
 }
 button.danger {
   margin-left: auto;

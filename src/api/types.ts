@@ -54,6 +54,9 @@ export type { MctsStatsDto as MctsSearchStats } from './generated/MctsStatsDto';
 export type { MctsStatsDto as MctsStats } from './generated/MctsStatsDto';
 export type { NnueStatsDto as NnueSearchStats } from './generated/NnueStatsDto';
 export type { NnueStatsDto as NnueStats } from './generated/NnueStatsDto';
+export type { NnueBranchDto as NnueBranch } from './generated/NnueBranchDto';
+export type { NnueGreedyActionDto as NnueGreedyAction } from './generated/NnueGreedyActionDto';
+export type { NnueGreedyDto as NnueGreedy } from './generated/NnueGreedyDto';
 /** 开局场景请求体（tag = "kind" 内部标签联合）。 */
 export type { OpeningScenario } from './generated/OpeningScenario';
 export type { RecentGamesResp } from './generated/RecentGamesResp';

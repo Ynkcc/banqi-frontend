@@ -38,7 +38,6 @@ function bringFront() {
 function clamp(x: number, y: number): { x: number; y: number } {
   const margin = 8;
   const w = el.value?.offsetWidth ?? props.width;
-  const h = el.value?.offsetHeight ?? 120;
   const maxX = window.innerWidth - w - margin;
   const maxY = window.innerHeight - 36 - margin; // 至少保留标题栏可见
   return {
