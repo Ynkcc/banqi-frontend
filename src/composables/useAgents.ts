@@ -54,6 +54,7 @@ const AGENT_KINDS: { value: StrategyKind; label: string; feature?: 'torch' | 'on
   { value: 'MctsOnnx', label: 'MCTS+ONNX', feature: 'onnx' },
   { value: 'Expectimax', label: 'Expectimax' },
   { value: 'ExpectimaxNnue', label: 'Expectimax+NNUE' },
+  { value: 'NnueGreedy', label: '纯网络贪心' },
 ];
 
 interface AgentsStore {
@@ -88,7 +89,7 @@ const store = reactive<AgentsStore>({
 
 /** 该策略种类的可选模型清单（由 useSettings 提供模型目录扫描结果）。 */
 function modelsFor(kind: SlotKind, ptModels: { path: string }[], nnueModels: { path: string }[]) {
-  if (kind === 'ExpectimaxNnue') return nnueModels;
+  if (kind === 'ExpectimaxNnue' || kind === 'NnueGreedy') return nnueModels;
   if (kind === 'MctsOnnx' || kind === 'MctsDL') return ptModels;
   return [];
 }

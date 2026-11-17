@@ -398,6 +398,7 @@ function slotKindLabel(kind: SlotKind): string {
     CaptureFirst: '优先吃子',
     Expectimax: 'Expectimax',
     ExpectimaxNnue: 'Expectimax+NNUE',
+    NnueGreedy: '纯网络贪心',
     MctsOnnx: 'MCTS+ONNX',
     MctsDL: 'MCTS+DL',
   };

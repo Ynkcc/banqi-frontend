@@ -87,6 +87,7 @@ export type StrategyKind =
   | 'CaptureFirst'
   | 'Expectimax'
   | 'ExpectimaxNnue'
+  | 'NnueGreedy'
   | 'MctsOnnx'
   | 'MctsDL';
 
@@ -95,7 +96,9 @@ export type SlotKind = 'Human' | 'Agent' | StrategyKind;
 
 /** 需要绑定模型的策略（模型类策略）。 */
 export function strategyNeedsModel(kind: StrategyKind): boolean {
-  return kind === 'ExpectimaxNnue' || kind === 'MctsOnnx' || kind === 'MctsDL';
+  return (
+    kind === 'ExpectimaxNnue' || kind === 'NnueGreedy' || kind === 'MctsOnnx' || kind === 'MctsDL'
+  );
 }
 
 /** Expectimax 搜索预算模式（与 banqi-app BudgetMode 契约一致）。 */
