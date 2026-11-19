@@ -335,12 +335,6 @@ function transformAttr(): string {
                   {{ store.selectedDetail.q.toFixed(4) }}
                 </dd>
               </div>
-              <div>
-                <dt>Q_hp</dt>
-                <dd :class="valueClass(store.selectedDetail.health_q)">
-                  {{ store.selectedDetail.health_q.toFixed(4) }}
-                </dd>
-              </div>
               <div><dt>prior</dt><dd>{{ store.selectedDetail.prior.toFixed(4) }}</dd></div>
               <div><dt>logit</dt><dd>{{ store.selectedDetail.logit.toFixed(3) }}</dd></div>
               <div>
