@@ -86,7 +86,10 @@ function actionLabel(a: NnueGreedyAction): string {
           <option v-for="m in modelsFor(store.form.kind, ptModels, nnueModels)" :key="m.path" :value="m.path">{{ m.path }}</option>
         </select>
       </label>
-      <label v-if="store.form.kind === 'MctsOnnx' || store.form.kind === 'MctsDL'" class="field">
+      <label
+        v-if="store.form.kind === 'MctsOnnx' || store.form.kind === 'MctsDL' || store.form.kind === 'MctsNnue'"
+        class="field"
+      >
         <span>搜索次数</span>
         <input v-model.number="store.form.mctsSims" type="number" min="1" />
       </label>

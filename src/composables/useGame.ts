@@ -179,7 +179,7 @@ async function applyStep(prev: GameState, result: StepResult) {
   checkGameOver(result);
 }
 
-/** MCTS 搜索统计写日志栏（仅 MctsDL / MctsOnnx 对手携带）。 */
+/** MCTS 搜索统计写日志栏（MctsDL / MctsOnnx / MctsNnue 对手携带）。 */
 function logMctsStats(stats: NonNullable<import('../api/types').StepResult['mcts_stats']>) {
   appendLog(
     `MCTS 搜索: ${stats.reused ? '复用搜索树' : '全新建树'}，` +
@@ -401,6 +401,7 @@ function slotKindLabel(kind: SlotKind): string {
     NnueGreedy: '纯网络贪心',
     MctsOnnx: 'MCTS+ONNX',
     MctsDL: 'MCTS+DL',
+    MctsNnue: 'MCTS+NNUE',
   };
   return labels[kind] ?? kind;
 }

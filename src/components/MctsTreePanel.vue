@@ -204,7 +204,7 @@ function transformAttr(): string {
         @mouseleave="onDragEnd"
       >
         <div v-if="!rootInfo" class="mcts-empty">
-          暂无搜索树：请先让 MctsDL / MctsOnnx 对手走一步，或手动搜索
+          暂无搜索树：请先让 MctsDL / MctsOnnx / MCTS+NNUE 对手走一步，或手动搜索
         </div>
         <svg v-else :viewBox="`0 0 ${svgViewBox.width} ${svgViewBox.height}`" width="100%" height="100%">
           <g :transform="transformAttr()">

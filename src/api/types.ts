@@ -92,7 +92,8 @@ export type StrategyKind =
   | 'ExpectimaxNnue'
   | 'NnueGreedy'
   | 'MctsOnnx'
-  | 'MctsDL';
+  | 'MctsDL'
+  | 'MctsNnue';
 
 /** 槽位种类："Human"（用户本人操作）、任意策略，或绑定 Agent 实体。 */
 export type SlotKind = 'Human' | 'Agent' | StrategyKind;
@@ -100,7 +101,11 @@ export type SlotKind = 'Human' | 'Agent' | StrategyKind;
 /** 需要绑定模型的策略（模型类策略）。 */
 export function strategyNeedsModel(kind: StrategyKind): boolean {
   return (
-    kind === 'ExpectimaxNnue' || kind === 'NnueGreedy' || kind === 'MctsOnnx' || kind === 'MctsDL'
+    kind === 'ExpectimaxNnue' ||
+    kind === 'NnueGreedy' ||
+    kind === 'MctsOnnx' ||
+    kind === 'MctsDL' ||
+    kind === 'MctsNnue'
   );
 }
 

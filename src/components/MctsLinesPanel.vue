@@ -37,7 +37,7 @@ watch(
 <template>
   <div class="mcts-lines-zone">
     <div v-if="!store.rootInfo" class="mcts-empty mcts-lines-empty">
-      暂无搜索树：请先让 MctsDL / MctsOnnx 对手走一步，或手动搜索
+      暂无搜索树：请先让 MctsDL / MctsOnnx / MCTS+NNUE 对手走一步，或手动搜索
     </div>
     <template v-else>
       <div class="mcts-lines-toolbar">

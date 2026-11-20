@@ -52,6 +52,7 @@ const AGENT_KINDS: { value: StrategyKind; label: string; feature?: 'torch' | 'on
   { value: 'CaptureFirst', label: '优先吃子' },
   { value: 'MctsDL', label: 'MCTS+DL', feature: 'torch' },
   { value: 'MctsOnnx', label: 'MCTS+ONNX', feature: 'onnx' },
+  { value: 'MctsNnue', label: 'MCTS+NNUE' },
   { value: 'Expectimax', label: 'Expectimax' },
   { value: 'ExpectimaxNnue', label: 'Expectimax+NNUE' },
   { value: 'NnueGreedy', label: '纯网络贪心' },
@@ -89,14 +90,14 @@ const store = reactive<AgentsStore>({
 
 /** 该策略种类的可选模型清单（由 useSettings 提供模型目录扫描结果）。 */
 function modelsFor(kind: SlotKind, ptModels: { path: string }[], nnueModels: { path: string }[]) {
-  if (kind === 'ExpectimaxNnue' || kind === 'NnueGreedy') return nnueModels;
+  if (kind === 'ExpectimaxNnue' || kind === 'NnueGreedy' || kind === 'MctsNnue') return nnueModels;
   if (kind === 'MctsOnnx' || kind === 'MctsDL') return ptModels;
   return [];
 }
 
 /** 由表单组装搜索参数（按策略种类裁剪，未用字段不下发）。 */
 function formParams(form: AgentCreateForm): AgentParamsCfg {
-  if (form.kind === 'MctsOnnx' || form.kind === 'MctsDL') {
+  if (form.kind === 'MctsOnnx' || form.kind === 'MctsDL' || form.kind === 'MctsNnue') {
     return { mcts_sims: form.mctsSims };
   }
   if (form.kind === 'Expectimax') {
